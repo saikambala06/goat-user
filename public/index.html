@@ -667,6 +667,7 @@
         }
         // --- WISHLIST COUNT HELPER ---
         function getVisibleWishlistCount() {
+            // Count items that are in wishlist AND exist in livestock (even sold ones)
             return wishlist.filter(id => livestock.some(item => item._id === id)).length;
         }
         
@@ -1251,6 +1252,7 @@
             });
             renderBrowse();
         }
+        
         function renderBrowse() {
             const searchInput = document.getElementById('search-input');
             if (!searchInput) return;
@@ -1278,13 +1280,28 @@
             grid.innerHTML = filtered.map(item => {
                 const inWishlist = wishlist.includes(item._id); 
                 const imageUrl = `${API_URL}/livestock/image/${item._id}`;
+                const isSold = item.status === 'Sold';
+                
+                // If sold, disable buttons and show sold badge
+                const buttons = isSold 
+                    ? `<div class="text-red-600 font-bold px-3 py-2 text-sm bg-red-50 rounded-lg border border-red-100 w-full text-center">Sold Out</div>`
+                    : `<div class="flex gap-2 w-full">
+                        <button onclick="buyNow('${item._id}')" class="flex-1 bg-green-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-green-700 transition">Buy Now</button>
+                        <button onclick="addToCart('${item._id}')" class="flex-1 bg-gray-900 text-white px-3 py-2 rounded-lg text-sm hover:bg-gray-800 transition">Add to Cart</button>
+                       </div>`;
+
+                const statusBadge = isSold 
+                    ? `<span class="bg-red-500 text-white text-xs px-2 py-1 rounded flex-shrink-0 ml-1">Sold</span>`
+                    : `<span class="bg-gray-800 text-white text-xs px-2 py-1 rounded flex-shrink-0 ml-1">${item.tags?.[0] || 'Available'}</span>`;
+                
                 return `
-                <div class="bg-white p-4 rounded-xl border border-gray-200 hover:shadow-lg transition-shadow">
+                <div class="bg-white p-4 rounded-xl border border-gray-200 hover:shadow-lg transition-shadow relative">
                     <div class="h-40 bg-gray-100 rounded-lg flex items-center justify-center text-6xl mb-4 relative overflow-hidden">
-                        <img src="${imageUrl}" alt="${item.name}" class="w-full h-full object-cover rounded-lg" onerror="this.onerror=null; this.src='https://via.placeholder.com/160?text=No+Image';">
-                        <button onclick="toggleWishlist('${item._id}')" class="absolute top-2 right-2 p-2 bg-white rounded-full shadow-sm hover:text-red-500 ${inWishlist ? 'text-red-500' : 'text-gray-400'}">
+                        <img src="${imageUrl}" alt="${item.name}" class="w-full h-full object-cover rounded-lg ${isSold ? 'opacity-75 grayscale' : ''}" onerror="this.onerror=null; this.src='https://via.placeholder.com/160?text=No+Image';">
+                        <button onclick="toggleWishlist('${item._id}')" class="absolute top-2 right-2 p-2 bg-white rounded-full shadow-sm hover:text-red-500 ${inWishlist ? 'text-red-500' : 'text-gray-400'} z-10">
                             <i data-lucide="heart" class="w-4 h-4 ${inWishlist ? 'fill-current' : ''}"></i>
                         </button>
+                        ${isSold ? '<div class="absolute inset-0 flex items-center justify-center bg-black/10"><span class="bg-red-600 text-white px-3 py-1 font-bold rounded shadow-lg transform -rotate-12 border-2 border-white">SOLD</span></div>' : ''}
                     </div>
                     <div class="flex justify-between items-start mb-2">
                         <div class="truncate pr-2 w-full">
@@ -1295,14 +1312,11 @@
                                 Weight: ${item.weight ? item.weight + ' kg' : 'N/A'}
                             </p>
                         </div>
-                        <span class="bg-gray-800 text-white text-xs px-2 py-1 rounded flex-shrink-0 ml-1">${item.tags?.[0] || 'Good'}</span>
+                        ${statusBadge}
                     </div>
-                    <div class="flex items-center justify-between mt-4">
+                    <div class="flex flex-col gap-3 mt-4">
                         <span class="text-xl font-bold text-green-700">${formatINR(item.price)}</span>
-                        <div class="flex gap-2">
-                            <button onclick="buyNow('${item._id}')" class="bg-green-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-green-700 transition">Buy Now</button>
-                            <button onclick="addToCart('${item._id}')" class="bg-gray-900 text-white px-3 py-2 rounded-lg text-sm hover:bg-gray-800 transition">Add to Cart</button>
-                        </div>
+                        ${buttons}
                     </div>
                 </div>
             `}).join('');
@@ -1353,6 +1367,7 @@
             titleEl.innerText = `(${cart.length} items)`;
             lucide.createIcons();
         }
+        
         function renderOrders() {
             const container = document.getElementById('orders-list-full');
             if (!container) return;
@@ -1368,7 +1383,7 @@
                     return `
                         <div class="flex flex-col text-sm text-gray-700 mb-2">
                             <span>Name: ${i.name}</span>
-                            <span>Breed: ${i.breed || 'N/A'}</span>
+                            <span>Type: ${i.type || 'Livestock'}</span> <span>Breed: ${i.breed || 'N/A'}</span>
                             <span>Weight: ${weight !== 'N/A' && weight ? weight + ' kg' : 'N/A'}</span>
                         </div>
                     `;
@@ -1428,16 +1443,26 @@
             }
             grid.innerHTML = items.map(item => {
                 const imageUrl = `${API_URL}/livestock/image/${item._id}`;
+                const isSold = item.status === 'Sold';
+                
+                const buttons = isSold
+                    ? `<div class="text-red-600 font-bold px-3 py-2 text-sm bg-red-50 rounded-lg border border-red-100 w-full text-center">Sold Out</div>`
+                    : `<div class="flex gap-2 w-full">
+                        <button onclick="buyNow('${item._id}')" class="flex-1 bg-green-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-green-700 transition">Buy Now</button>
+                        <button onclick="addToCart('${item._id}')" class="flex-1 bg-gray-900 text-white px-3 py-2 rounded-lg text-sm hover:bg-gray-800 transition">Add to Cart</button>
+                       </div>`;
+
                 return `
                 <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm relative">
                     <button onclick="toggleWishlist('${item._id}')" class="absolute top-4 right-4 text-red-500 bg-white rounded-full p-1 shadow hover:bg-red-50 transition z-10">
                         <i data-lucide="x" class="w-4 h-4"></i>
                     </button>
                     <div class="h-40 bg-gray-100 rounded-lg flex items-center justify-center text-6xl mb-4 overflow-hidden relative">
-                        <img src="${imageUrl}" alt="${item.name}" class="w-full h-full object-cover rounded-lg" onerror="this.onerror=null; this.src='https://via.placeholder.com/160?text=No+Image';">
+                        <img src="${imageUrl}" alt="${item.name}" class="w-full h-full object-cover rounded-lg ${isSold ? 'opacity-75 grayscale' : ''}" onerror="this.onerror=null; this.src='https://via.placeholder.com/160?text=No+Image';">
+                        ${isSold ? '<div class="absolute inset-0 flex items-center justify-center bg-black/10"><span class="bg-red-600 text-white px-3 py-1 font-bold rounded shadow-lg transform -rotate-12 border-2 border-white">SOLD</span></div>' : ''}
                     </div>
                     <div class="flex justify-between items-start mb-2">
-                         <div class="truncate pr-2">
+                         <div class="truncate pr-2 w-full">
                              <h3 class="font-bold text-lg text-gray-800 truncate">${item.name}</h3>
                              <div class="text-xs text-gray-500 mt-1">
                                 <p>Type: ${item.type || 'N/A'}</p> <p>Breed: ${item.breed}</p>
@@ -1445,12 +1470,9 @@
                              </div>
                          </div>
                     </div>
-                    <div class="flex items-center justify-between mt-4">
+                    <div class="flex flex-col gap-3 mt-4">
                         <span class="text-xl font-bold text-green-700">${formatINR(item.price)}</span>
-                        <div class="flex gap-2">
-                            <button onclick="buyNow('${item._id}')" class="bg-green-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-green-700 transition">Buy Now</button>
-                            <button onclick="addToCart('${item._id}')" class="bg-gray-900 text-white px-3 py-2 rounded-lg text-sm hover:bg-gray-800 transition">Add to Cart</button>
-                        </div>
+                        ${buttons}
                     </div>
                 </div>
             `}).join('');
@@ -1494,8 +1516,18 @@
         }
         // --- CART / WISHLIST / CHECKOUT ACTIONS ---
         function addToCart(id) {
+            // Check if item is already in cart
+            if (cart.some(item => item._id === id)) {
+                showToast('This item is already in your cart.', 'warning');
+                return;
+            }
+
             const item = livestock.find(i => i._id === id);
             if (item) {
+                if (item.status === 'Sold') {
+                    showToast('This item is already sold out.', 'error');
+                    return;
+                }
                 const cartItem = { 
                     _id: item._id, 
                     name: item.name, 
@@ -1526,20 +1558,22 @@
             renderCart();
         }
         function toggleWishlist(id) {
-            const index = wishlist.indexOf(id);
+            // Ensure ID is valid string to prevent mismatch
+            const targetId = String(id);
+            const index = wishlist.indexOf(targetId);
+            
             if (index === -1) {
-                if (!wishlist.includes(id)) {
-                    wishlist.push(id);
-                    showToast('Added to wishlist', 'success');
-                } else {
-                    showToast('Already in wishlist', 'info');
-                }
+                // Not in wishlist, add it
+                wishlist.push(targetId);
+                showToast('Added to wishlist', 'success');
             } else {
+                // In wishlist, remove specifically this ID
                 wishlist.splice(index, 1);
                 showToast('Removed from wishlist', 'info');
             }
             saveUserState();
             updateWishlistBadge(); 
+            
             const active = document.querySelector('.nav-item.bg-green-600')?.getAttribute('onclick') || '';
             if (active.includes('wishlist')) renderWishlist();
             if (active.includes('browse')) renderBrowse();
@@ -1548,6 +1582,10 @@
         function buyNow(id) {
             const item = livestock.find(i => i._id === id);
             if (item) {
+                if (item.status === 'Sold') {
+                    showToast('This item is already sold out.', 'error');
+                    return;
+                }
                 const cartItem = { 
                     _id: item._id, 
                     name: item.name, 
@@ -1557,7 +1595,15 @@
                     weight: item.weight,
                     selected: true 
                 };
-                cart = [cartItem]; 
+                // If it's already in cart, don't duplicate, just go there
+                if (!cart.some(c => c._id === id)) {
+                    cart = [cartItem]; 
+                } else {
+                    // Filter cart to only show this item selected? 
+                    // Simpler: just clear and add this for immediate checkout
+                    cart = [cartItem]; 
+                }
+                
                 updateCartBadge();
                 saveUserState();
                 // Redirect to cart then checkout
@@ -2029,8 +2075,9 @@
                     method: "POST",
                     credentials: "include",
                     headers: { "Content-Type": "application/json" },
+                    // Added TYPE here
                     body: JSON.stringify({
-                        items: items.map(i => ({ _id: i._id, name: i.name, price: i.price, breed: i.breed, weight: i.weight })),
+                        items: items.map(i => ({ _id: i._id, name: i.name, price: i.price, breed: i.breed, weight: i.weight, type: i.type })),
                         total,
                         date: new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
                         address: currentAddress,
