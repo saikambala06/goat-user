@@ -3,15 +3,16 @@ const mongoose = require('mongoose');
 const orderSchema = new mongoose.Schema({
     customer: { type: String, required: true },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    date: { type: String, required: true }, // Keeping string for simplicity matching frontend
+    date: { type: String, required: true }, 
     items: [{
         id: String,
         name: String,
         price: Number,
-        breed: String
+        breed: String,
+        type: String // Added TYPE here to persist (Goat/Sheep)
     }],
     total: { type: Number, required: true },
-    status: { type: String, default: 'Processing' }, // Processing, Shipped, Delivered
+    status: { type: String, default: 'Processing' }, // Processing, Shipped, Delivered, Cancelled
     address: {
         name: String,
         phone: String,
@@ -24,4 +25,3 @@ const orderSchema = new mongoose.Schema({
 });
 
 module.exports = mongoose.model('Order', orderSchema);
-
