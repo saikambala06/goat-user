@@ -149,7 +149,8 @@ app.post('/api/admin/livestock', upload.single('image'), async (req, res) => {
             weight: weight || "N/A", 
             price: parseFloat(price) || 0,
             tags: tagArray, 
-            status, image
+            status: status || 'Available', 
+            image
         });
 
         await newItem.save();
@@ -232,9 +233,12 @@ app.get('/api/admin/users', async (req, res) => {
 
 // --- PUBLIC/USER ROUTES ---
 
+// GET Livestock (Available + Sold to display status, filter handled on frontend if needed, 
+// but usually we want to show Sold items in browse too so people see activity)
 app.get('/api/livestock', async (req, res) => {
     try {
-        const livestock = await Livestock.find({ status: 'Available' }, '-image'); 
+        // Return everything so we can show "Sold" badges on the frontend
+        const livestock = await Livestock.find({}, '-image'); 
         res.json(livestock);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -264,7 +268,7 @@ app.get('/api/orders', authMiddleware, async (req, res) => {
     }
 });
 
-// ✅ UPDATED: Cancel Order Route (With Validation)
+// ✅ UPDATED: Cancel Order & RESTOCK Items
 app.put('/api/orders/:id/cancel', authMiddleware, async (req, res) => {
     try {
         const orderId = req.params.id;
@@ -282,20 +286,44 @@ app.put('/api/orders/:id/cancel', authMiddleware, async (req, res) => {
             return res.status(400).json({ message: `Cannot cancel order with status: ${order.status}` });
         }
 
+        // 1. Update Order Status
         order.status = 'Cancelled';
         await order.save();
-        res.json({ success: true, message: 'Order cancelled', order });
+
+        // 2. Restock Items (Mark as Available)
+        if (order.items && order.items.length > 0) {
+            const itemIds = order.items.map(i => i.id || i._id); // Handle both id formats
+            await Livestock.updateMany(
+                { _id: { $in: itemIds } },
+                { $set: { status: 'Available' } }
+            );
+        }
+
+        res.json({ success: true, message: 'Order cancelled and items restocked', order });
     } catch (err) {
         console.error('Cancel Order Error:', err);
         res.status(500).json({ message: 'Server error during cancellation' });
     }
 });
 
+// ✅ UPDATED: Create Order & MARK Items as SOLD
 app.post('/api/orders', authMiddleware, async (req, res) => {
     try {
         const newOrder = new Order({ ...req.body, userId: req.user.id, customer: req.user.name });
         await newOrder.save();
+
+        // 1. Mark purchased items as 'Sold' in Inventory
+        if (req.body.items && req.body.items.length > 0) {
+            const itemIds = req.body.items.map(i => i.id || i._id);
+            await Livestock.updateMany(
+                { _id: { $in: itemIds } },
+                { $set: { status: 'Sold' } }
+            );
+        }
+
+        // 2. Clear User Cart
         await User.findByIdAndUpdate(req.user.id, { $set: { cart: [] } });
+        
         res.status(201).json(newOrder);
     } catch (err) {
         console.error('Order Error:', err);
@@ -331,7 +359,7 @@ app.put('/api/user/state', authMiddleware, async (req, res) => {
     }
 });
 
-// Legacy Notifications Route (Retained for compatibility, returns empty to prevent errors)
+// Legacy Notifications Route (Retained for compatibility)
 app.get('/api/notifications', authMiddleware, (req, res) => {
     res.json([]); 
 });
