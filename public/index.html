@@ -1,0 +1,2351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>LivestockMart - User App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; overscroll-behavior-y: contain; }
+        
+        /* Utility to hide scrollbar but allow scrolling */
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Auth Styles */
+        .auth-glass {
+            background: rgba(17, 24, 39, 0.95);
+            backdrop-filter: blur(18px);
+        }
+        .auth-card {
+            position: relative;
+            overflow-y: auto; 
+            overflow-x: hidden;
+            max-height: 85vh; 
+        }
+        .auth-panel {
+            transition: transform 0.45s ease, opacity 0.45s ease;
+            width: 100%;
+        }
+        .auth-panel-register {
+            position: absolute;
+            top: 0;
+            left: 0;
+            transform: translateX(100%);
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .auth-card.show-register .auth-panel-login {
+            transform: translateX(-100%);
+            opacity: 0;
+            pointer-events: none;
+        }
+        .auth-card.show-register .auth-panel-register {
+            transform: translateX(0);
+            opacity: 1;
+            pointer-events: auto;
+            position: relative;
+        }
+        
+        /* Mobile Sidebar Transition */
+        #sidebar { transition: transform 0.3s ease-in-out; }
+        
+        /* Animation Classes */
+        .lm-flyin { transform: translateY(18px); opacity: 0; transition: transform 360ms cubic-bezier(.2,.9,.2,1), opacity 360ms; }
+        .lm-flyin.lm-show { transform: translateY(0); opacity: 1; }
+        .lm-pop { transform: scale(.98); opacity: 0; transition: transform 260ms cubic-bezier(.2,.9,.2,1), opacity 260ms; }
+        .lm-pop.lm-show { transform: scale(1); opacity: 1; }
+
+        /* Page transition */
+        .page-enter { opacity: 0; transform: translateY(20px); }
+        .page-enter-active { opacity: 1; transform: translateY(0); transition: all .6s cubic-bezier(.16,.67,.43,1); }
+
+        /* Card hover premium */
+        .card-premium { transition: transform .35s cubic-bezier(.2,.9,.2,1), box-shadow .35s; }
+        .card-premium:hover { transform: translateY(-6px) scale(1.03); box-shadow: 0 18px 40px rgba(0,0,0,0.15); }
+
+        /* Scroll reveal */
+        .reveal { opacity: 0; transform: translateY(25px); transition: all .7s cubic-bezier(.2,.9,.2,1); }
+        .reveal-visible { opacity: 1; transform: translateY(0); }
+
+        /* Toast slide/fade */
+        .toast-anim { transform: translateX(20px); opacity: 0; animation: toastIn .4s forwards, toastOut .4s forwards 3s; }
+        @keyframes toastIn { to { transform: translateX(0); opacity: 1; } }
+        @keyframes toastOut { to { transform: translateX(30px); opacity: 0; } }
+
+        /* Button press & glow */
+        .btn-press { transition: transform .15s ease, box-shadow .3s ease; }
+        .btn-press:active { transform: scale(.96); }
+        .btn-glow:hover { box-shadow: 0 0 12px rgba(16,185,129,0.6); }
+
+        /* Pull to refresh spinner */
+        #pull-refresh-indicator {
+            position: fixed;
+            top: -50px;
+            left: 0;
+            right: 0;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            transition: top 0.2s;
+            pointer-events: none;
+        }
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid rgba(16, 185, 129, 0.3);
+            border-radius: 50%;
+            border-top-color: #10b981;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        /* Payment App Icons Hover */
+        .pay-icon-btn { transition: transform 0.2s, border-color 0.2s; }
+        .pay-icon-btn:hover { transform: scale(1.05); border-color: #10b981; }
+    </style>
+</head>
+<body class="h-screen bg-gray-900 text-gray-100 overflow-hidden">
+    
+    <div id="pull-refresh-indicator">
+        <div class="spinner"></div>
+    </div>
+
+    <div id="mobile-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-black/50 z-20 hidden md:hidden backdrop-blur-sm transition-opacity"></div>
+
+    <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-3 pointer-events-none"></div>
+    
+    <div id="address-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60 px-4">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-md text-gray-800 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold" id="address-modal-title">Shipping Address</h3>
+                <button onclick="closeAddressModal()" class="text-gray-400 hover:text-gray-600">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <p class="text-xs text-gray-500 mb-4">Enter the address where you want to receive your livestock.</p>
+            <div class="pr-1">
+                <form id="address-form" class="space-y-3" onsubmit="submitAddress(event)">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700">Full Name</label>
+                        <input id="addr-name" type="text" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700">Phone Number</label>
+                        <input id="addr-phone" type="tel" pattern="[0-9]{10}" maxlength="10"
+                            class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            placeholder="10-digit mobile number" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700">Address Line</label>
+                        <textarea id="addr-line" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" rows="2" required></textarea>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700">City</label>
+                            <input id="addr-city" type="text" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" required>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700">State</label>
+                            <input id="addr-state" type="text" class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" required>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700">Pincode</label>
+                        <input id="addr-pincode" type="tel" pattern="[0-9]{6}" maxlength="6"
+                            class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            placeholder="6-digit pincode" required>
+                    </div>
+                    <div class="mt-4 flex justify-end gap-3 pb-2">
+                        <button type="button" onclick="closeAddressModal()" class="px-4 py-2 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">
+                            Cancel
+                        </button>
+                        <button type="submit" class="px-4 py-2 text-sm rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">
+                            Save & Continue
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div id="track-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60 px-4">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-lg text-gray-800 shadow-2xl relative">
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="text-lg font-bold">Track Order</h3>
+                <button onclick="closeTrackModal()" class="text-gray-400 hover:text-gray-600">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            
+            <div id="track-content" class="space-y-6">
+                </div>
+        </div>
+    </div>
+    
+    <div id="auth-screen" class="hidden fixed inset-0 z-40 flex items-center justify-center px-4 bg-gradient-to-br from-green-900 via-gray-900 to-black overflow-y-auto py-8">
+        <div class="max-w-5xl w-full grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch my-auto">
+            <div class="hidden md:flex flex-col justify-between text-white">
+                <div>
+                    <div class="flex items-center gap-3 mb-6">
+                        <div class="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center font-bold text-lg">
+                            L
+                        </div>
+                        <span class="text-2xl font-bold tracking-tight">LivestockMart</span>
+                    </div>
+                    <h1 class="text-3xl md:text-4xl font-bold leading-tight mb-4">
+                        Manage your goats & sheep<br>like a modern marketplace.
+                    </h1>
+                    <p class="text-sm text-emerald-100/80">
+                        Realtime livestock listings, smart orders, and a smooth shopping experience –
+                        all in one dashboard. Login or create an account to get started.
+                    </p>
+                </div>
+                <div class="flex items-center gap-3 text-xs text-emerald-100/70 mt-8">
+                    <i data-lucide="shield-check" class="w-4 h-4"></i>
+                    <span>Secure authentication • Data stored safely in MongoDB</span>
+                </div>
+            </div>
+            <div id="auth-card" class="auth-card auth-glass rounded-3xl p-6 sm:p-8 shadow-2xl border border-white/10 hide-scrollbar">
+                
+                <div class="auth-panel auth-panel-login">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-9 h-9 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                            <i data-lucide="lock" class="w-4 h-4 text-emerald-400"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-semibold">Welcome back</h2>
+                            <p class="text-xs text-gray-300">Sign in to access your LivestockMart dashboard</p>
+                        </div>
+                    </div>
+                    <form id="login-form" class="space-y-4 mt-4">
+                        <div class="space-y-1.5">
+                            <label class="text-xs font-medium text-gray-200">Email</label>
+                            <input id="login-email" type="email" required
+                                   class="w-full rounded-xl bg-gray-900/70 border border-gray-700 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                                   placeholder="you@example.com">
+                        </div>
+                        <div class="space-y-1.5">
+                            <label class="text-xs font-medium text-gray-200">Password</label>
+                            <input id="login-password" type="password" required
+                                   class="w-full rounded-xl bg-gray-900/70 border border-gray-700 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                                   placeholder="••••••••">
+                        </div>
+                        <button type="submit"
+                                class="w-full mt-2 inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-sm font-semibold text-white py-2.5 transition-transform active:scale-[0.98]">
+                            <span>Sign in</span>
+                            <i data-lucide="log-in" class="w-4 h-4"></i>
+                        </button>
+                    </form>
+                    <div class="mt-4 text-xs text-gray-300 flex items-center justify-between">
+                        <span>New here?</span>
+                        <button type="button"
+                                onclick="switchAuthView('register')"
+                                class="text-emerald-300 hover:text-emerald-200 font-medium">
+                            Create an account
+                        </button>
+                    </div>
+                </div>
+
+                <div class="auth-panel auth-panel-register">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                                <i data-lucide="user-plus" class="w-4 h-4 text-emerald-400"></i>
+                            </div>
+                            <div>
+                                <h2 class="text-xl font-semibold">Create account</h2>
+                                <p class="text-xs text-gray-300">Join the marketplace</p>
+                            </div>
+                        </div>
+                        <button onclick="switchAuthView('login')" class="text-gray-400 hover:text-white p-2 rounded-full hover:bg-white/10 transition">
+                            <i data-lucide="arrow-left" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                    <form id="register-form" class="space-y-4 mt-4">
+                        <div class="space-y-1.5">
+                            <label class="text-xs font-medium text-gray-200">Full Name</label>
+                            <input id="register-name" type="text" required
+                                   class="w-full rounded-xl bg-gray-900/70 border border-gray-700 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                                   placeholder="Alex Johnson">
+                        </div>
+                        <div class="space-y-1.5">
+                            <label class="text-xs font-medium text-gray-200">Email</label>
+                            <input id="register-email" type="email" required
+                                   class="w-full rounded-xl bg-gray-900/70 border border-gray-700 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                                   placeholder="you@example.com">
+                        </div>
+                        <div class="space-y-1.5">
+                            <label class="text-xs font-medium text-gray-200">Password</label>
+                            <input id="register-password" type="password" required
+                                   class="w-full rounded-xl bg-gray-900/70 border border-gray-700 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                                   placeholder="Create a strong password">
+                        </div>
+                        <button type="submit"
+                                class="w-full mt-2 inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-sm font-semibold text-white py-2.5 transition-transform active:scale-[0.98]">
+                            <span>Create account</span>
+                            <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                        </button>
+                    </form>
+                    <div class="mt-4 text-xs text-gray-300 flex items-center justify-between">
+                        <span>Already registered?</span>
+                        <button type="button"
+                                onclick="switchAuthView('login')"
+                                class="text-emerald-300 hover:text-emerald-200 font-medium">
+                            Back to login
+                        </button>
+                    </div>
+                </div>
+                <div id="auth-error" class="mt-4 text-xs text-red-300 hidden"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="user-app" class="hidden h-[100dvh] w-full bg-gray-50 text-gray-800 flex overflow-hidden">
+        
+        <aside id="sidebar" class="fixed inset-y-0 left-0 z-30 w-64 bg-white border-r border-gray-200 flex flex-col transform -translate-x-full md:translate-x-0 md:relative transition-transform duration-200 ease-in-out shadow-xl md:shadow-none h-full">
+            <div class="p-6 flex items-center justify-between gap-3 flex-shrink-0">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center text-white font-bold">L</div>
+                    <span class="text-xl font-bold text-gray-800">LivestockMart</span>
+                </div>
+                <button onclick="toggleSidebar()" class="md:hidden text-gray-500 hover:text-red-500">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+            
+            <nav class="flex-1 px-4 space-y-2 overflow-y-auto min-h-0 pb-24 md:pb-4">
+                <button onclick="router('browse')" class="nav-item w-full flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                    <i data-lucide="home" class="w-5 h-5 flex-shrink-0"></i> Browse Livestock
+                </button>
+                <button onclick="router('dashboard')" class="nav-item w-full flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                    <i data-lucide="layout-dashboard" class="w-5 h-5 flex-shrink-0"></i> My Dashboard
+                </button>
+                <button onclick="router('cart')" class="nav-item w-full flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                    <i data-lucide="shopping-cart" class="w-5 h-5 flex-shrink-0"></i> Shopping Cart
+                    <span id="cart-badge" class="ml-auto bg-red-500 text-white text-xs px-2 py-0.5 rounded-full hidden">0</span>
+                </button>
+                <button onclick="router('orders')" class="nav-item w-full flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                    <i data-lucide="package" class="w-5 h-5 flex-shrink-0"></i> My Orders
+                </button>
+                <button onclick="router('wishlist')" class="nav-item w-full flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                    <i data-lucide="heart" class="w-5 h-5 flex-shrink-0"></i> Wishlist
+                    <span id="wishlist-badge" class="ml-auto bg-pink-500 text-white text-xs px-2 py-0.5 rounded-full hidden">0</span>
+                </button>
+                <button onclick="router('addresses')" class="nav-item w-full flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                    <i data-lucide="map-pin" class="w-5 h-5 flex-shrink-0"></i> Addresses
+                </button>
+                <button onclick="router('profile')" class="nav-item w-full flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                    <i data-lucide="user" class="w-5 h-5 flex-shrink-0"></i> Profile
+                </button>
+                <button onclick="router('support')" class="nav-item w-full flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                    <i data-lucide="headphones" class="w-5 h-5 flex-shrink-0"></i> Support
+                </button>
+            </nav>
+        </aside>
+
+        <main id="main-content" class="flex-1 flex flex-col relative overflow-hidden w-full h-full">
+            <header class="bg-white border-b border-gray-200 px-4 md:px-8 py-4 flex justify-between items-center z-10 sticky top-0 flex-shrink-0">
+                <div class="flex items-center gap-3">
+                    <button onclick="toggleSidebar()" class="md:hidden text-gray-600 hover:text-green-600">
+                        <i data-lucide="menu" class="w-6 h-6"></i>
+                    </button>
+                    <div class="overflow-hidden">
+                        <h1 id="page-title" class="text-lg md:text-2xl font-bold text-gray-800 truncate">My Dashboard</h1>
+                        <p class="text-xs md:text-sm text-gray-500 hidden sm:block" id="current-date"></p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3 md:gap-6">
+                    <div class="relative">
+                        <button id="notification-button" onclick="toggleNotificationMenu()" class="focus:outline-none p-2 rounded-full hover:bg-gray-100 transition relative">
+                            <i data-lucide="bell" class="w-6 h-6 text-gray-600 pointer-events-none"></i>
+                            <span id="notification-badge" class="absolute top-1 right-1 bg-red-500 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full hidden pointer-events-none">0</span>
+                        </button>
+                        <div id="notification-menu"
+                             class="absolute right-[-60px] md:right-0 mt-2 w-72 max-w-[92vw] bg-white border border-gray-100 rounded-xl shadow-xl py-2 hidden origin-top-right transform transition-all duration-300 scale-95 opacity-0 z-50">
+                            <div class="flex justify-between items-center px-4 pt-2 pb-1 border-b border-gray-100">
+                                <h4 class="font-semibold text-sm text-gray-800">Notifications</h4>
+                                <button onclick="clearAllNotifications()" class="text-xs text-blue-500 hover:text-blue-700 disabled:opacity-50" id="clear-all-btn" disabled>Clear All</button>
+                            </div>
+                            <div id="notification-list" class="max-h-64 overflow-y-auto space-y-1 p-2">
+                                <p class="text-center text-xs text-gray-400 py-4" id="no-notifications-msg">No new notifications.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="relative cursor-pointer" onclick="router('cart')">
+                        <i data-lucide="shopping-cart" class="w-6 h-6 text-gray-600"></i>
+                        <span id="header-cart-badge" class="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full hidden">0</span>
+                    </div>
+                    <div class="relative">
+                        <button id="profile-button"
+                                onclick="toggleProfileMenu()"
+                                class="flex items-center gap-2 md:gap-3 focus:outline-none">
+                            <div id="profile-avatar"
+                                 class="w-9 h-9 md:w-10 md:h-10 bg-green-100 rounded-full flex items-center justify-center text-green-700 font-bold text-sm md:text-base flex-shrink-0">
+                                U
+                            </div>
+                            <div class="hidden md:block text-left">
+                                <p id="profile-name" class="text-sm font-semibold truncate max-w-[100px]">User</p>
+                                <p id="profile-meta" class="text-xs text-gray-500">Welcome</p>
+                            </div>
+                            <i data-lucide="chevron-down" class="w-4 h-4 text-gray-500 hidden md:block"></i>
+                        </button>
+                        <div id="profile-menu"
+                             class="absolute right-0 mt-2 w-44 bg-white border border-gray-100 rounded-lg shadow-lg py-1 hidden z-50">
+                            <button onclick="router('profile'); toggleProfileMenu(false);"
+                                    class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                                <i data-lucide="user" class="w-4 h-4"></i>
+                                <span>Profile</span>
+                            </button>
+                            <button onclick="handleLogout()"
+                                    class="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2">
+                                <i data-lucide="log-out" class="w-4 h-4"></i>
+                                <span>Logout</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </header>
+            <div id="content-area" class="flex-1 overflow-y-auto p-4 md:p-8 bg-gray-50 hide-scrollbar relative pb-24">
+                <div id="view-dashboard" class="space-y-6">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+                        <div class="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex justify-between items-center">
+                            <div>
+                                <p class="text-sm text-gray-500 mb-1">My Orders</p>
+                                <h3 class="text-2xl font-bold text-gray-800" id="dash-total-orders">0</h3>
+                            </div>
+                            <div class="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xl">📦</div>
+                        </div>
+                        <div class="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex justify-between items-center">
+                            <div>
+                                <p class="text-sm text-gray-500 mb-1">Wishlist</p>
+                                <h3 class="text-2xl font-bold text-gray-800" id="dash-total-wishlist">0</h3>
+                            </div>
+                            <div class="w-12 h-12 bg-pink-100 text-pink-600 rounded-full flex items-center justify-center text-xl">❤️</div>
+                        </div>
+                        <div class="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex justify-between items-center">
+                            <div>
+                                <p class="text-sm text-gray-500 mb-1">Cart Items</p>
+                                <h3 class="text-2xl font-bold text-gray-800" id="dash-total-cart">0</h3>
+                            </div>
+                            <div class="w-12 h-12 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center text-xl">🛒</div>
+                        </div>
+                        <div class="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex justify-between items-center">
+                            <div>
+                                <p class="text-sm text-gray-500 mb-1">Total Livestock</p>
+                                <h3 class="text-2xl font-bold text-gray-800" id="dash-total-livestock">0</h3>
+                            </div>
+                            <div class="w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-xl">🐐</div>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <p class="text-sm text-gray-500 mb-1">Total Spent</p>
+                                <h3 class="text-2xl md:text-3xl font-bold text-gray-800" id="dash-total-spent">0</h3>
+                            </div>
+                            <div class="w-12 h-12 md:w-16 md:h-16 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center text-2xl md:text-3xl">💰</div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl border border-gray-200 shadow-sm">
+                        <div class="p-6 border-b border-gray-200">
+                            <h3 class="font-bold text-gray-800">Recent Orders</h3>
+                        </div>
+                        <div class="p-4 md:p-6 space-y-4" id="dash-recent-orders"></div>
+                    </div>
+                </div>
+                <div id="view-browse" class="hidden space-y-6">
+                    <div class="flex flex-col md:flex-row gap-4 justify-between">
+                        <div class="relative flex-1 w-full md:max-w-md">
+                            <i data-lucide="search" class="absolute left-3 top-3 w-5 h-5 text-gray-400"></i>
+                            <input type="text" id="search-input" oninput="renderBrowse()" placeholder="Search by name or breed..." class="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
+                        </div>
+                        <div class="flex gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
+                            <button onclick="filterCategory('All')" class="filter-btn px-4 py-2 bg-gray-800 text-white hover:bg-gray-700 rounded-lg text-sm font-medium whitespace-nowrap transition-colors">All</button>
+                            <button onclick="filterCategory('Goat')" class="filter-btn px-4 py-2 bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-lg text-sm font-medium whitespace-nowrap transition-colors">Goats</button>
+                            <button onclick="filterCategory('Sheep')" class="filter-btn px-4 py-2 bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-lg text-sm font-medium whitespace-nowrap transition-colors">Sheep</button>
+                        </div>
+                    </div>
+                    <div id="livestock-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+                </div>
+                <div id="view-cart" class="hidden space-y-6">
+                    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 md:p-6">
+                        <h3 class="font-bold text-lg mb-6">Shopping Cart <span id="cart-count-title" class="text-gray-400 text-sm font-normal">(0 items)</span></h3>
+                        <div id="cart-items-container" class="space-y-6">
+                            <div class="text-center py-10 text-gray-400">Your cart is empty</div>
+                        </div>
+                        <div class="mt-8 pt-6 border-t border-gray-100 flex flex-col sm:flex-row justify-between items-center gap-4">
+                            <h3 class="text-xl font-bold">Total: <span id="cart-total">0</span></h3>
+                            <button onclick="checkout()" class="w-full sm:w-auto bg-gray-800 text-white px-8 py-3 rounded-lg font-medium hover:bg-gray-900 transition">Proceed to Checkout</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="view-summary" class="hidden space-y-6">
+                    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 md:p-6 max-w-3xl mx-auto">
+                        <div class="flex items-center gap-3 mb-6 border-b pb-4">
+                            <button onclick="router('cart')" class="text-gray-500 hover:text-gray-800">
+                                <i data-lucide="arrow-left" class="w-5 h-5"></i>
+                            </button>
+                            <h3 class="font-bold text-xl">Order Summary</h3>
+                        </div>
+                        
+                        <div class="mb-6 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                            <div class="flex justify-between items-center mb-3">
+                                <h4 class="font-semibold text-gray-700">Deliver To:</h4>
+                                <button onclick="openAddressModal()" class="text-sm text-green-600 font-medium hover:underline flex items-center gap-1">
+                                    <i data-lucide="plus" class="w-3 h-3"></i> Add New
+                                </button>
+                            </div>
+                            <div id="summary-address-list" class="space-y-2">
+                                </div>
+                        </div>
+                        
+                        <div class="mb-6">
+                            <h4 class="font-semibold text-gray-700 mb-3">Product Details</h4>
+                            <div id="summary-items" class="space-y-4">
+                                </div>
+                        </div>
+                        
+                        <div class="border-t pt-4 space-y-2 text-sm text-gray-600">
+                            <div class="flex justify-between">
+                                <span>Item Total</span>
+                                <span id="summary-subtotal" class="font-medium">₹0</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Delivery Fee</span>
+                                <span class="text-green-600">Free</span>
+                            </div>
+                            <div class="flex justify-between text-lg font-bold text-gray-800 pt-2 border-t mt-2">
+                                <span>Grand Total</span>
+                                <span id="summary-total">₹0</span>
+                            </div>
+                        </div>
+                        
+                        <button onclick="proceedToPayment()" class="w-full bg-green-600 text-white py-3 rounded-lg font-bold text-lg hover:bg-green-700 shadow-lg mt-6 transition">
+                            Continue to Payment
+                        </button>
+                    </div>
+                </div>
+
+                <div id="view-orders" class="hidden space-y-6">
+                    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 md:p-6">
+                        <h3 class="font-bold text-lg mb-6">Order History</h3>
+                        <div class="space-y-4" id="orders-list-full"></div>
+                    </div>
+                </div>
+                <div id="view-wishlist" class="hidden space-y-6">
+                     <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-bold text-xl">My Wishlist</h3>
+                     </div>
+                     <div id="wishlist-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+                </div>
+                <div id="view-addresses" class="hidden space-y-6">
+                    <div class="bg-white p-4 md:p-6 rounded-xl border shadow-sm">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="font-bold text-lg">Saved Addresses</h3>
+                            <button onclick="openAddressModal()" class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition">
+                                <i data-lucide="plus" class="w-4 h-4 inline mr-1"></i> Add New
+                            </button>
+                        </div>
+                        <div id="addresses-container" class="space-y-4">
+                            </div>
+                    </div>
+                </div>
+                <div id="view-profile" class="hidden space-y-6">
+                    <div class="bg-white p-4 md:p-6 rounded-xl border shadow-sm">
+                        <h3 class="font-bold text-lg mb-4">Profile Settings</h3>
+                        <div class="space-y-4 max-w-md">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Full Name</label>
+                                <input id="profile-name-input" type="text" value="" disabled
+                                       class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-gray-100 cursor-not-allowed">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Email</label>
+                                <input id="profile-email-input" type="email" value="" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2" disabled>
+                            </div>
+                            <p class="text-xs text-gray-400">Profile is based on your login data.</p>
+                        </div>
+                    </div>
+                </div>
+                <div id="view-support" class="hidden space-y-6">
+                    <div class="bg-white p-6 rounded-xl border shadow-sm text-center py-12">
+                        <i data-lucide="headphones" class="w-12 h-12 mx-auto text-green-600 mb-4"></i>
+                        <h3 class="font-bold text-lg">Need Help?</h3>
+                        <p class="text-gray-500 mb-4">Contact our support team 24/7</p>
+                        <button class="bg-green-600 text-white px-6 py-2 rounded-full">Start Chat</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script>
+        const API_URL = 'https://goat-user.vercel.app/api';
+        let livestock = [];
+        let orders = [];
+        let cart = []; 
+        let wishlist = []; 
+        let addresses = [];
+        // Notification State
+        let notifications = [];
+        let currentCategory = 'All';
+        let currentUser = null;
+        let appInitialized = false;
+        let currentAddress = null;
+        let pendingCheckoutItems = null;
+        let editingAddressIndex = -1;
+        let autoRefreshInterval = null; 
+        
+        // --- Sidebar Logic ---
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('mobile-overlay');
+            
+            if (sidebar.classList.contains('-translate-x-full')) {
+                // Open sidebar
+                sidebar.classList.remove('-translate-x-full');
+                overlay.classList.remove('hidden');
+            } else {
+                // Close sidebar
+                sidebar.classList.add('-translate-x-full');
+                overlay.classList.add('hidden');
+            }
+        }
+        
+        // Load baselines from local storage for change detection
+        let previousLivestockCount = parseInt(localStorage.getItem('lm_prev_ls_count') || '0');
+        let previousOrdersSnapshot = localStorage.getItem('lm_prev_orders_snap') || '[]';
+        // --------------------------------------------
+        
+        // --- Toast popup ---
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+            const id = 'toast-' + Date.now();
+            const baseClasses = 'pointer-events-auto max-w-xs w-full rounded-xl shadow-lg px-4 py-3 text-sm flex items-start gap-3 transform transition-all duration-200';
+            const types = {
+                success: 'bg-emerald-600 text-white',
+                error: 'bg-red-600 text-white',
+                warning: 'bg-yellow-500 text-black',
+                info: 'bg-gray-800 text-white'
+            };
+            const icon = {
+                success: 'check-circle',
+                error: 'alert-triangle',
+                warning: 'alert-circle',
+                info: 'info'
+            }[type] || 'info';
+            const div = document.createElement('div');
+            div.id = id;
+            div.className = baseClasses + ' ' + (types[type] || types.info);
+            div.innerHTML = `
+                <div class="mt-0.5">
+                    <i data-lucide="${icon}" class="w-4 h-4"></i>
+                </div>
+                <div class="flex-1">${message}</div>
+                <button onclick="document.getElementById('${id}')?.remove()" class="ml-2 text-xs opacity-80 hover:opacity-100">
+                    ✕
+                </button>
+            `;
+            container.appendChild(div);
+            lucide.createIcons();
+            setTimeout(() => {
+                div.classList.add('opacity-0', 'translate-x-2');
+                setTimeout(() => div.remove(), 150);
+            }, 3000);
+        }
+        // --- Helpers for INR formatting ---
+        function formatINR(value) {
+            const num = Number(value) || 0;
+            return num.toLocaleString('en-IN');
+        }
+        // --- WISHLIST COUNT HELPER ---
+        function getVisibleWishlistCount() {
+            return wishlist.filter(id => livestock.some(item => item._id === id)).length;
+        }
+        
+        // --- NOTIFICATION UI HELPERS (MongoDB Persistence) ---
+        async function saveNotifications() {
+            await saveUserState();
+        }
+
+        function updateNotificationBadge() {
+            const badge = document.getElementById('notification-badge');
+            const clearBtn = document.getElementById('clear-all-btn');
+            if (!badge) return;
+            const count = notifications.length;
+            badge.innerText = count;
+            if (count > 0) {
+                badge.classList.remove('hidden');
+                if (clearBtn) clearBtn.disabled = false;
+            } else {
+                badge.classList.add('hidden');
+                if (clearBtn) clearBtn.disabled = true;
+            }
+        }
+
+        function renderNotifications() {
+            const list = document.getElementById('notification-list');
+            if (!list) return;
+
+            if (notifications.length === 0) {
+                list.innerHTML = `<p class="text-center text-xs text-gray-400 py-4" id="no-notifications-msg">No new notifications.</p>`;
+            } else {
+                // Display newest notifications first
+                list.innerHTML = [...notifications].reverse().map(n => `
+                    <div class="flex items-start justify-between p-3 rounded-lg hover:bg-gray-50 transition duration-150">
+                        <div class="flex items-start gap-2 flex-1">
+                            <i data-lucide="${n.icon}" class="w-4 h-4 mt-0.5 text-${n.color}-500 flex-shrink-0"></i>
+                            <div>
+                                <p class="text-xs font-medium text-gray-800">${n.title}</p>
+                                <p class="text-[11px] text-gray-500">${n.message}</p>
+                            </div>
+                        </div>
+                        <button onclick="removeNotification('${n.id}')" class="text-gray-400 hover:text-gray-600 ml-2 p-1 -mt-1">
+                            <i data-lucide="x" class="w-3 h-3"></i>
+                        </button>
+                    </div>
+                `).join('');
+            }
+            updateNotificationBadge();
+            lucide.createIcons();
+        }
+
+        function toggleNotificationMenu(force) {
+            const menu = document.getElementById('notification-menu');
+            if (!menu) return;
+
+            const isHidden = menu.classList.contains('hidden');
+
+            if (typeof force === 'boolean') {
+                if (force) {
+                    menu.classList.remove('hidden', 'scale-95', 'opacity-0');
+                    menu.classList.add('scale-100', 'opacity-100');
+                } else {
+                    menu.classList.remove('scale-100', 'opacity-100');
+                    menu.classList.add('scale-95', 'opacity-0');
+                    setTimeout(() => menu.classList.add('hidden'), 300); 
+                }
+                return;
+            }
+
+            if (isHidden) {
+                renderNotifications();
+                menu.classList.remove('hidden', 'scale-95', 'opacity-0');
+                menu.classList.add('scale-100', 'opacity-100');
+            } else {
+                menu.classList.remove('scale-100', 'opacity-100');
+                menu.classList.add('scale-95', 'opacity-0');
+                setTimeout(() => menu.classList.add('hidden'), 300); 
+            }
+        }
+
+        async function removeNotification(id) { 
+            notifications = notifications.filter(n => n.id !== id);
+            await saveNotifications(); // Persist to DB
+            renderNotifications();
+        }
+
+        async function clearAllNotifications() {
+            notifications = [];
+            await saveNotifications(); // Persist to DB
+            renderNotifications();
+            showToast('All notifications cleared.', 'info');
+        }
+        // ----------------------------------------------------
+
+        // --- USER STATE MANAGEMENT (MongoDB) ---
+        async function loadUserState() {
+            if (!currentUser || !currentUser.id) return;
+            try {
+                // Add timestamp to prevent caching
+                const response = await fetch(`${API_URL}/user/state?_=${Date.now()}`, {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+                if (response.ok) {
+                    const data = await response.json(); 
+                    cart = data.cart || [];
+                    wishlist = data.wishlist || []; 
+                    addresses = data.addresses || [];
+                    // Load notifications from DB
+                    notifications = data.notifications || []; 
+                    
+                    if (addresses.length > 0 && !currentAddress) {
+                        currentAddress = addresses[0];
+                    }
+                } else {
+                    cart = [];
+                    wishlist = [];
+                    addresses = [];
+                    notifications = [];
+                    currentAddress = null;
+                }
+            } catch (e) {
+                console.error('Error loading user state:', e);
+            }
+        }
+        async function saveUserState() {
+            if (!currentUser || !currentUser.id) return;
+            try {
+                // Include notifications in the put request to persist them
+                const response = await fetch(`${API_URL}/user/state`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ cart, wishlist, addresses, notifications }) 
+                });
+                if (!response.ok) {
+                    console.error('Failed to save user state');
+                }
+            } catch (e) {
+                console.error('Error saving user state:', e);
+            }
+        }
+        // --- AUTH UI HELPERS ---
+        function switchAuthView(mode) {
+            const card = document.getElementById('auth-card');
+            if (!card) return;
+            if (mode === 'register') {
+                card.classList.add('show-register');
+                document.querySelector('.auth-panel-register').style.position = 'relative';
+                document.querySelector('.auth-panel-login').style.position = 'absolute';
+            } else {
+                card.classList.remove('show-register');
+                document.querySelector('.auth-panel-register').style.position = 'absolute';
+                document.querySelector('.auth-panel-login').style.position = 'relative';
+            }
+        }
+        function showAuthError(message) {
+            const el = document.getElementById('auth-error');
+            if (!el) return;
+            if (message) {
+                el.textContent = message;
+                el.classList.remove('hidden');
+                showToast(message, 'error');
+            } else {
+                el.textContent = '';
+                el.classList.add('hidden');
+            }
+        }
+        function showAuthScreen() {
+            const auth = document.getElementById('auth-screen');
+            const app = document.getElementById('user-app');
+            if (auth) auth.classList.remove('hidden');
+            if (app) app.classList.add('hidden');
+        }
+        function showApp() {
+            const auth = document.getElementById('auth-screen');
+            const app = document.getElementById('user-app');
+            if (auth) auth.classList.add('hidden');
+            if (app) app.classList.remove('hidden');
+            if (!appInitialized) {
+                initApp();
+            }
+        }
+        function getInitials(name) {
+            if (!name) return 'U';
+            return name
+                .split(' ')
+                .filter(Boolean)
+                .map(n => n[0].toUpperCase())
+                .join('')
+                .slice(0, 2);
+        }
+        function updateProfileUI() {
+            const avatar = document.getElementById('profile-avatar');
+            const nameEl = document.getElementById('profile-name');
+            const metaEl = document.getElementById('profile-meta');
+            const profileNameInput = document.getElementById('profile-name-input');
+            const profileEmailInput = document.getElementById('profile-email-input');
+            const name = currentUser?.name || 'User';
+            const email = currentUser?.email || '';
+            if (avatar) avatar.textContent = getInitials(name);
+            if (nameEl) nameEl.textContent = name;
+            if (metaEl) metaEl.textContent = 'Welcome back';
+            if (profileNameInput) profileNameInput.value = name;
+            if (profileEmailInput) profileEmailInput.value = email;
+        }
+        function toggleProfileMenu(force) {
+            const menu = document.getElementById('profile-menu');
+            if (!menu) return;
+            if (typeof force === 'boolean') {
+                if (force) menu.classList.remove('hidden');
+                else menu.classList.add('hidden');
+                return;
+            }
+            menu.classList.toggle('hidden');
+        }
+        async function handleLogin(event) {
+            event.preventDefault();
+            showAuthError('');
+            const email = document.getElementById('login-email').value.trim();
+            const password = document.getElementById('login-password').value.trim();
+            if (!email || !password) {
+                showAuthError('Please enter email and password.');
+                return;
+            }
+            try {
+                const res = await fetch(`${API_URL}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ email, password })
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    showAuthError(data.message || 'Login failed.');
+                    return;
+                }
+                currentUser = data.user;
+                await loadUserState();
+                updateProfileUI();
+                updateCartBadge();
+                updateWishlistBadge(); 
+                updateNotificationBadge(); 
+                showToast('Logged in successfully', 'success');
+                showApp();
+            } catch (err) {
+                console.error('Login error', err);
+                showAuthError('Something went wrong. Please try again.');
+            }
+        }
+        async function handleRegister(event) {
+            event.preventDefault();
+            showAuthError('');
+            const name = document.getElementById('register-name').value.trim();
+            const email = document.getElementById('register-email').value.trim();
+            const password = document.getElementById('register-password').value.trim();
+            if (!name || !email || !password) {
+                showAuthError('All fields are required to register.');
+                return;
+            }
+            try {
+                const res = await fetch(`${API_URL}/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ name, email, password })
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    showAuthError(data.message || 'Registration failed.');
+                    return;
+                }
+                currentUser = data.user;
+                await loadUserState();
+                updateProfileUI();
+                updateCartBadge();
+                updateWishlistBadge(); 
+                updateNotificationBadge(); 
+                showToast('Account created & logged in', 'success');
+                showApp();
+            } catch (err) {
+                console.error('Register error', err);
+                showAuthError('Something went wrong. Please try again.');
+            }
+        }
+        async function handleLogout() {
+            try {
+                await fetch(`${API_URL}/auth/logout`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+            } catch (err) {
+                console.error('Logout error', err);
+            }
+            // Clear all user-specific in-memory state
+            currentUser = null;
+            cart = [];
+            wishlist = [];
+            addresses = [];
+            currentAddress = null;
+            notifications = [];
+            
+            ['login-email', 'login-password', 'register-name', 'register-email', 'register-password'].forEach(id => {
+                const el = document.getElementById(id);
+                if(el) el.value = '';
+            });
+            
+            localStorage.removeItem('lm_prev_ls_count');
+            localStorage.removeItem('lm_prev_orders_snap');
+            
+            if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+
+            updateCartBadge();
+            updateWishlistBadge(); 
+            updateNotificationBadge(); 
+            toggleProfileMenu(false);
+            showToast('Logged out', 'info');
+            switchAuthView('login'); 
+            showAuthScreen();
+        }
+        async function checkAuth() {
+            try {
+                const res = await fetch(`${API_URL}/auth/me?_=${Date.now()}`, { 
+                    method: 'GET',
+                    credentials: 'include'
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    currentUser = data.user;
+                    await loadUserState(); 
+                    
+                    updateProfileUI();
+                    showApp();
+                } else {
+                    showAuthScreen();
+                }
+            } catch (err) {
+                console.error('Auth check error', err);
+                showAuthScreen();
+            }
+        }
+        // --- DATA LOADING ---
+        async function loadData() {
+            // 1. ALWAYS REFRESH USER STATE (Cart, Wishlist, Addresses) on every tick
+            if (currentUser) {
+                await loadUserState();
+            }
+
+            let fetchedOrders = orders;
+            let fetchedLivestock = livestock;
+            
+            // Check baseline for changes
+            const isBaselineInitialized = previousLivestockCount > 0 || JSON.parse(previousOrdersSnapshot).length > 0;
+            
+            try {
+                // 2. Fetch Livestock
+                const lsRes = await fetch(`${API_URL}/livestock?_=${Date.now()}`);
+                fetchedLivestock = await lsRes.json();
+                
+                fetchedLivestock.sort((a, b) => (a._id < b._id) ? 1 : -1);
+                
+                // 3. Fetch Notifications API
+                try {
+                     const notifRes = await fetch(`${API_URL}/notifications?_=${Date.now()}`);
+                     if (notifRes.ok) {
+                         const fetchedNotifs = await notifRes.json();
+                         fetchedNotifs.forEach(fn => {
+                             if(!notifications.some(n => n.id === fn.id)) {
+                                 notifications.push(fn);
+                             }
+                         });
+                     }
+                } catch(e) { /* Ignore */ }
+
+                // Notification Logic: New Livestock Added
+                if (isBaselineInitialized && fetchedLivestock.length > previousLivestockCount) {
+                    const newCount = fetchedLivestock.length - previousLivestockCount;
+                    notifications.push({
+                        id: 'ls_' + Date.now() + Math.random(),
+                        title: 'Market Update',
+                        message: `${newCount} new livestock item${newCount > 1 ? 's' : ''} added to the market!`,
+                        icon: 'sheep',
+                        color: 'green',
+                        timestamp: Date.now()
+                    });
+                }
+                
+                // 4. Fetch User-specific Orders
+                if (currentUser) {
+                    const ordRes = await fetch(`${API_URL}/orders?_=${Date.now()}`, {
+                        method: 'GET',
+                        credentials: 'include'
+                    });
+                    fetchedOrders = await ordRes.json();
+                    fetchedOrders.sort((a,b) => (a._id < b._id) ? 1 : -1); 
+
+                    // Notification Logic: Order Status Change
+                    const previousOrderMap = JSON.parse(previousOrdersSnapshot).reduce((acc, o) => {
+                        acc[o._id] = o.status;
+                        return acc;
+                    }, {});
+
+                    if (isBaselineInitialized) {
+                        fetchedOrders.forEach(newOrder => {
+                            const oldStatus = previousOrderMap[newOrder._id];
+                            if (oldStatus && oldStatus !== newOrder.status) {
+                                notifications.push({
+                                    id: 'order_' + newOrder._id + Date.now(),
+                                    title: 'Order Status Update',
+                                    message: `Order #${String(newOrder._id).slice(-6)} status changed to ${newOrder.status}.`,
+                                    icon: 'package',
+                                    color: newOrder.status === 'Delivered' ? 'gray' : 'blue',
+                                    timestamp: Date.now()
+                                });
+                            }
+                        });
+                    }
+                }
+            } catch (e) {
+                console.error("API Error during loadData", e);
+            }
+            
+            // --- CHANGE DETECTION LOGIC ---
+            const livestockChanged = JSON.stringify(livestock) !== JSON.stringify(fetchedLivestock);
+            const ordersChanged = JSON.stringify(orders) !== JSON.stringify(fetchedOrders);
+            const notificationsChanged = notifications.length > 0 && isBaselineInitialized; // simplified check
+
+            // Updates
+            if(livestockChanged) livestock = fetchedLivestock;
+            if(ordersChanged) orders = fetchedOrders;
+            
+            // Update baselines
+            previousLivestockCount = livestock.length;
+            localStorage.setItem('lm_prev_ls_count', livestock.length);
+
+            previousOrdersSnapshot = JSON.stringify(orders.map(o => ({ _id: o._id, status: o.status })));
+            localStorage.setItem('lm_prev_orders_snap', previousOrdersSnapshot);
+            
+            if (notificationsChanged) await saveNotifications();
+
+            // Refresh Wishlist Filter
+            const validLivestockIds = livestock.map(item => item._id);
+            const cleanedWishlist = wishlist.filter(id => validLivestockIds.includes(id));
+            if (cleanedWishlist.length !== wishlist.length) {
+                wishlist = cleanedWishlist;
+                await saveUserState();
+            }
+            
+            // --- SELECTIVE RE-RENDERING ---
+            // Only re-render if data actually changed to prevent blinking
+            const activeNav = document.querySelector('.nav-item.bg-green-600');
+            let currentView = 'dashboard';
+            if (activeNav) {
+                const onclick = activeNav.getAttribute('onclick') || "";
+                currentView = onclick.replace("router('", "").replace("')", "") || 'dashboard';
+            } else if (!document.getElementById('view-summary').classList.contains('hidden')) {
+                currentView = 'summary';
+            }
+            
+            if (currentView === 'browse' && livestockChanged) renderBrowse(); 
+            if (currentView === 'orders' && ordersChanged) renderOrders();
+            // Dashboard depends on multiple sources, re-render if any changed
+            if (currentView === 'dashboard' && (livestockChanged || ordersChanged)) renderDashboard(); 
+            // Cart/Wishlist/Addresses are updated by loadUserState which usually doesn't cause blinking unless layout shifts, 
+            // but we can re-render them safely if they are active.
+            if (currentView === 'cart') renderCart(); 
+            if (currentView === 'wishlist') renderWishlist();
+            if (currentView === 'addresses') renderAddresses();
+            if (currentView === 'summary') renderSummary();
+
+            // Badges always update
+            updateCartBadge();
+            updateWishlistBadge(); 
+            updateNotificationBadge(); 
+        }
+        // --- ROUTING ---
+        function router(viewName) {
+            const searchInput = document.getElementById('search-input');
+            if (searchInput) {
+                searchInput.value = ''; 
+            }
+            
+            currentCategory = 'All';
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                if (btn.innerText === 'All') {
+                    btn.classList.add('bg-gray-800', 'text-white', 'hover:bg-gray-700');
+                    btn.classList.remove('bg-white', 'text-gray-600', 'border', 'hover:bg-gray-50');
+                } else {
+                    btn.classList.remove('bg-gray-800', 'text-white', 'hover:bg-gray-700');
+                    btn.classList.add('bg-white', 'text-gray-600', 'border', 'hover:bg-gray-50');
+                }
+            });
+
+            loadData();
+            
+            const titles = {
+                'dashboard': 'My Dashboard', 'browse': 'Browse Livestock', 'cart': 'Shopping Cart',
+                'orders': 'My Orders', 'wishlist': 'My Wishlist', 'addresses': 'Addresses',
+                'profile': 'My Profile', 'support': 'Support', 'summary': 'Order Summary'
+            };
+            document.getElementById('page-title').innerText = titles[viewName] || 'Dashboard';
+            
+            const views = ['dashboard', 'browse', 'cart', 'orders', 'wishlist', 'addresses', 'profile', 'support', 'summary'];
+            views.forEach(v => document.getElementById(`view-${v}`)?.classList.add('hidden'));
+            const activeView = document.getElementById(`view-${viewName}`);
+            if (activeView) activeView.classList.remove('hidden');
+            
+            document.querySelectorAll('.nav-item').forEach(btn => {
+                if (viewName === 'summary') return; 
+                
+                if (btn.getAttribute('onclick').includes(viewName)) {
+                    btn.classList.add('bg-green-600', 'text-white');
+                    btn.classList.remove('text-gray-600', 'hover:bg-gray-100');
+                } else {
+                    btn.classList.remove('bg-green-600', 'text-white');
+                    btn.classList.add('text-gray-600', 'hover:bg-gray-100');
+                }
+            });
+
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('mobile-overlay');
+            if (window.innerWidth < 768 && !sidebar.classList.contains('-translate-x-full')) {
+                sidebar.classList.add('-translate-x-full');
+                overlay.classList.add('hidden');
+            }
+            
+            if (viewName === 'dashboard') renderDashboard();
+            if (viewName === 'browse') renderBrowse();
+            if (viewName === 'cart') renderCart();
+            if (viewName === 'orders') renderOrders();
+            if (viewName === 'wishlist') renderWishlist();
+            if (viewName === 'addresses') renderAddresses();
+            
+            updateCartBadge(); 
+            updateWishlistBadge(); 
+            updateNotificationBadge(); 
+
+            lucide.createIcons();
+        }
+        // --- RENDER FUNCTIONS ---
+        function renderDashboard() {
+            const totalSpent = orders.reduce((sum, order) => sum + (order.total || 0), 0);
+            document.getElementById('dash-total-spent').innerText = formatINR(totalSpent);
+            document.getElementById('dash-total-orders').innerText = orders.length;
+            
+            document.getElementById('dash-total-wishlist').innerText = getVisibleWishlistCount(); 
+            
+            document.getElementById('dash-total-cart').innerText = cart.length; 
+            document.getElementById('dash-total-livestock').innerText = livestock.length;
+            const recentContainer = document.getElementById('dash-recent-orders');
+            if (orders.length === 0) {
+                recentContainer.innerHTML = '<p class="text-gray-500 text-sm">No orders yet.</p>';
+            } else {
+                const recent = orders.slice(0, 3);
+                recentContainer.innerHTML = recent.map(o => `
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-gray-50 rounded-lg gap-3">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 bg-white rounded flex items-center justify-center text-2xl border border-gray-100">📦</div>
+                            <div>
+                                <p class="font-bold text-gray-800">${o.items[0].name} ${o.items.length > 1 ? '+' + (o.items.length - 1) + ' more' : ''}</p>
+                                <p class="text-xs text-gray-500">#${String(o._id).slice(-6)} • ${o.date}</p>
+                            </div>
+                        </div>
+                        <div class="text-left sm:text-right w-full sm:w-auto flex justify-between sm:block pl-[3.25rem] sm:pl-0">
+                            <p class="font-bold">${formatINR(o.total)}</p>
+                            <span class="text-xs px-2 py-1 ${getStatusColor(o.status)} rounded-full font-medium inline-block mt-1">${o.status}</span>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+        function filterCategory(cat) {
+            currentCategory = cat;
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                const onclickVal = btn.getAttribute('onclick');
+                if (onclickVal.includes("'" + cat + "'") || (cat === 'All' && onclickVal.includes("'All'"))) {
+                    btn.classList.add('bg-gray-800', 'text-white', 'hover:bg-gray-700');
+                    btn.classList.remove('bg-white', 'text-gray-600', 'border', 'hover:bg-gray-50');
+                } else {
+                    btn.classList.remove('bg-gray-800', 'text-white', 'hover:bg-gray-700');
+                    btn.classList.add('bg-white', 'text-gray-600', 'border', 'hover:bg-gray-50');
+                }
+            });
+            renderBrowse();
+        }
+        function renderBrowse() {
+            const searchInput = document.getElementById('search-input');
+            if (!searchInput) return;
+            
+            const searchTerm = searchInput.value.toLowerCase().trim();
+            const grid = document.getElementById('livestock-grid');
+            
+            const filtered = livestock.filter(item => {
+                const name = (item.name || '').toLowerCase();
+                const breed = (item.breed || '').toLowerCase();
+                const matchSearch = name.includes(searchTerm) || breed.includes(searchTerm);
+                
+                const itemType = (item.type || '').toLowerCase();
+                const selectedCat = currentCategory.toLowerCase();
+                const matchCat = currentCategory === 'All' || itemType === selectedCat || itemType.startsWith(selectedCat); 
+                
+                return matchSearch && matchCat;
+            });
+            
+            if (filtered.length === 0) {
+                grid.innerHTML = '<div class="col-span-full text-center text-gray-500 py-10">No livestock found matching your criteria.</div>';
+                return;
+            }
+            
+            grid.innerHTML = filtered.map(item => {
+                const inWishlist = wishlist.includes(item._id); 
+                const imageUrl = `${API_URL}/livestock/image/${item._id}`;
+                return `
+                <div class="bg-white p-4 rounded-xl border border-gray-200 hover:shadow-lg transition-shadow">
+                    <div class="h-40 bg-gray-100 rounded-lg flex items-center justify-center text-6xl mb-4 relative overflow-hidden">
+                        <img src="${imageUrl}" alt="${item.name}" class="w-full h-full object-cover rounded-lg" onerror="this.onerror=null; this.src='https://via.placeholder.com/160?text=No+Image';">
+                        <button onclick="toggleWishlist('${item._id}')" class="absolute top-2 right-2 p-2 bg-white rounded-full shadow-sm hover:text-red-500 ${inWishlist ? 'text-red-500' : 'text-gray-400'}">
+                            <i data-lucide="heart" class="w-4 h-4 ${inWishlist ? 'fill-current' : ''}"></i>
+                        </button>
+                    </div>
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="truncate pr-2 w-full">
+                            <h3 class="font-bold text-lg text-gray-800 truncate">${item.name}</h3>
+                            <p class="text-xs text-gray-500 mt-1">
+                                Type: ${item.type || 'N/A'}<br>
+                                Breed: ${item.breed || 'N/A'}<br>
+                                Weight: ${item.weight ? item.weight + ' kg' : 'N/A'}
+                            </p>
+                        </div>
+                        <span class="bg-gray-800 text-white text-xs px-2 py-1 rounded flex-shrink-0 ml-1">${item.tags?.[0] || 'Good'}</span>
+                    </div>
+                    <div class="flex items-center justify-between mt-4">
+                        <span class="text-xl font-bold text-green-700">${formatINR(item.price)}</span>
+                        <div class="flex gap-2">
+                            <button onclick="buyNow('${item._id}')" class="bg-green-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-green-700 transition">Buy Now</button>
+                            <button onclick="addToCart('${item._id}')" class="bg-gray-900 text-white px-3 py-2 rounded-lg text-sm hover:bg-gray-800 transition">Add to Cart</button>
+                        </div>
+                    </div>
+                </div>
+            `}).join('');
+            lucide.createIcons();
+            window.applyRevealAndPremium(); 
+        }
+        function renderCart() {
+            const container = document.getElementById('cart-items-container');
+            const totalEl = document.getElementById('cart-total');
+            const titleEl = document.getElementById('cart-count-title');
+            if (cart.length === 0) {
+                container.innerHTML = '<div class="text-center py-10 text-gray-400">Your cart is empty.</div>';
+                totalEl.innerText = '0';
+                titleEl.innerText = '(0 items)';
+                return;
+            }
+            let total = 0;
+            const selectedItems = cart.filter(item => item.selected !== false);
+            total = selectedItems.reduce((sum, item) => sum + (item.price || 0), 0);
+            container.innerHTML = cart.map((item, index) => {
+                const isSelected = item.selected !== false;
+                const imageUrl = `${API_URL}/livestock/image/${item._id}`;
+                return `
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-gray-50 rounded-lg gap-4">
+                    <div class="flex items-center gap-4 w-full sm:w-auto">
+                        <input type="checkbox" class="w-5 h-5 flex-shrink-0" ${isSelected ? 'checked' : ''} onchange="toggleCartSelection(${index}, this.checked)">
+                        <div class="w-16 h-16 bg-white rounded-lg flex items-center justify-center text-3xl border border-gray-200 flex-shrink-0 overflow-hidden">
+                           <img src="${imageUrl}" alt="${item.name}" class="w-full h-full object-cover rounded-lg" onerror="this.onerror=null; this.src='https://via.placeholder.com/64?text=Item';">
+                        </div>
+                        <div class="overflow-hidden">
+                            <h4 class="font-bold text-gray-800 truncate">${item.name}</h4>
+                            <div class="text-sm text-gray-500 mt-1">
+                                <p>Type: ${item.type || 'N/A'}</p> <p>Breed: ${item.breed}</p>
+                                <p>Weight: ${item.weight ? item.weight + ' kg' : 'N/A'}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between w-full sm:w-auto sm:gap-6 pl-9 sm:pl-0">
+                        <p class="font-bold text-lg text-green-700">${formatINR(item.price)}</p>
+                        <button onclick="removeFromCart(${index})" class="text-red-500 hover:bg-red-50 p-2 rounded-full">
+                            <i data-lucide="trash-2" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                </div>
+                `;
+            }).join('');
+            totalEl.innerText = formatINR(total);
+            titleEl.innerText = `(${cart.length} items)`;
+            lucide.createIcons();
+        }
+        function renderOrders() {
+            const container = document.getElementById('orders-list-full');
+            if (!container) return;
+            if (orders.length === 0) {
+                container.innerHTML = '<div class="text-center text-gray-500">No past orders.</div>';
+                return;
+            }
+            container.innerHTML = orders.map(o => {
+                // FIXED: Map through ALL items to create a row for each item
+                // This ensures if you buy 2 items, you see 2 images and 2 sets of details.
+                const itemsHtml = (o.items || []).map(i => {
+                    const fullItem = livestock.find(l => l._id === i._id);
+                    const weight = i.weight || (fullItem ? fullItem.weight : 'N/A');
+                    const imageUrl = `${API_URL}/livestock/image/${i._id}`;
+
+                    return `
+                        <div class="flex gap-4 mb-4 border-b border-gray-100 last:border-0 pb-4 last:pb-0">
+                            <div class="w-20 h-20 bg-gray-100 rounded-lg flex-shrink-0 overflow-hidden border border-gray-200">
+                                <img src="${imageUrl}" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='https://via.placeholder.com/80?text=Img';">
+                            </div>
+                            <div class="flex-1">
+                                <p class="font-bold text-gray-800">${i.name}</p>
+                                <p class="text-sm text-gray-600">Breed: ${i.breed || 'N/A'}</p>
+                                <p class="text-sm text-gray-600">Weight: ${weight !== 'N/A' && weight ? weight + ' kg' : 'N/A'}</p>
+                                <p class="text-sm font-semibold text-green-700 mt-1">${formatINR(i.price)}</p>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                
+                const addressHtml = o.address ? `<div><strong>Ship to:</strong> ${o.address.name}, +91 ${o.address.phone}</div>
+                    <div>${o.address.line1 || o.address.line || ''} ${o.address.line2 ? '<br/>'+o.address.line2 : ''}</div>
+                    <div>${o.address.city || ''}, ${o.address.state || ''} - ${o.address.pincode || ''}</div>` : '';
+                
+                const cancelBtn = o.status === 'Processing' ? `<button onclick="cancelOrder('${o._id}')" class="flex-1 bg-red-100 text-red-700 px-3 py-2 rounded-lg text-sm hover:bg-red-200 transition">Cancel Order</button>` : '';
+                const trackBtn = `<button onclick="openTrackModal('${o._id}')" class="flex-1 bg-blue-100 text-blue-700 px-3 py-2 rounded-lg text-sm hover:bg-blue-200 transition">Track Order</button>`;
+                
+                return `
+                    <div class="bg-white p-4 rounded-xl border border-gray-100 mb-4">
+                        <div class="flex flex-col sm:flex-row justify-between items-start mb-4 gap-2 border-b border-gray-100 pb-3">
+                            <div>
+                                <p class="font-bold text-gray-800">Order #${String(o._id).slice(-6)}</p>
+                                <p class="text-xs text-gray-500">${o.date}</p>
+                            </div>
+                            <div class="text-left sm:text-right">
+                                <p class="font-bold text-green-700">Total: ${formatINR(o.total)}</p>
+                                <span class="text-xs px-2 py-1 ${getStatusColor(o.status)} rounded-full font-medium inline-block mt-1">${o.status}</span>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            ${itemsHtml}
+                        </div>
+
+                        <div class="mt-3 pt-3 border-t border-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                            <div class="text-sm text-gray-600">${addressHtml}</div>
+                            <div class="flex gap-2 w-full sm:w-auto mt-2 sm:mt-0">
+                                ${trackBtn}
+                                ${cancelBtn}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            lucide.createIcons();
+        }
+        function renderWishlist() {
+            const grid = document.getElementById('wishlist-grid');
+            const items = livestock.filter(item => wishlist.includes(item._id)); 
+            if (items.length === 0) {
+                grid.innerHTML = '<div class="col-span-full text-center text-gray-500 py-10">Your wishlist is empty.</div>';
+                return;
+            }
+            grid.innerHTML = items.map(item => {
+                const imageUrl = `${API_URL}/livestock/image/${item._id}`;
+                return `
+                <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm relative">
+                    <button onclick="toggleWishlist('${item._id}')" class="absolute top-4 right-4 text-red-500 bg-white rounded-full p-1 shadow hover:bg-red-50 transition z-10">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
+                    <div class="h-40 bg-gray-100 rounded-lg flex items-center justify-center text-6xl mb-4 overflow-hidden relative">
+                        <img src="${imageUrl}" alt="${item.name}" class="w-full h-full object-cover rounded-lg" onerror="this.onerror=null; this.src='https://via.placeholder.com/160?text=No+Image';">
+                    </div>
+                    <div class="flex justify-between items-start mb-2">
+                         <div class="truncate pr-2">
+                             <h3 class="font-bold text-lg text-gray-800 truncate">${item.name}</h3>
+                             <div class="text-xs text-gray-500 mt-1">
+                                <p>Type: ${item.type || 'N/A'}</p> <p>Breed: ${item.breed}</p>
+                                <p>Weight: ${item.weight ? item.weight + ' kg' : 'N/A'}</p>
+                             </div>
+                         </div>
+                    </div>
+                    <div class="flex items-center justify-between mt-4">
+                        <span class="text-xl font-bold text-green-700">${formatINR(item.price)}</span>
+                        <div class="flex gap-2">
+                            <button onclick="buyNow('${item._id}')" class="bg-green-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-green-700 transition">Buy Now</button>
+                            <button onclick="addToCart('${item._id}')" class="bg-gray-900 text-white px-3 py-2 rounded-lg text-sm hover:bg-gray-800 transition">Add to Cart</button>
+                        </div>
+                    </div>
+                </div>
+            `}).join('');
+            lucide.createIcons();
+            window.applyRevealAndPremium(); 
+        }
+        function renderAddresses() {
+            const container = document.getElementById('addresses-container');
+            if (!container) return;
+            if (addresses.length === 0) {
+                container.innerHTML = `
+                    <div class="text-sm text-gray-500 bg-gray-50 border border-dashed border-gray-200 rounded-lg p-4 text-center">
+                        No saved addresses yet. Add an address to use during checkout.
+                    </div>
+                `;
+                return;
+            }
+            container.innerHTML = addresses.map((a, index) => `
+                <div class="border rounded-lg p-4 bg-gray-50 hover:bg-gray-100 transition">
+                    <div class="flex justify-between items-start mb-2">
+                        <div>
+                            <p class="font-semibold text-gray-800">${a.name}</p>
+                            <p class="text-xs text-gray-500">+91 ${a.phone}</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <span class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full whitespace-nowrap">${a.label || 'Default'}</span>
+                            <button onclick="editAddress(${index})" class="text-blue-500 hover:bg-blue-50 p-1 rounded">
+                                <i data-lucide="edit" class="w-4 h-4"></i>
+                            </button>
+                            <button onclick="deleteAddress(${index})" class="text-red-500 hover:bg-red-50 p-1 rounded">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-700 break-words">${a.line1 || a.line}</p>
+                    ${a.line2 ? `<p class="text-sm text-gray-700 break-words">${a.line2}</p>` : ''}
+                    <p class="text-sm text-gray-700 mt-1">${a.city}, ${a.state} - ${a.pincode}</p>
+                </div>
+            `).join('');
+            lucide.createIcons();
+        }
+        // --- CART / WISHLIST / CHECKOUT ACTIONS ---
+        function addToCart(id) {
+            const item = livestock.find(i => i._id === id);
+            if (item) {
+                const cartItem = { 
+                    _id: item._id, 
+                    name: item.name, 
+                    price: item.price, 
+                    breed: item.breed, 
+                    type: item.type,
+                    weight: item.weight, 
+                    selected: true 
+                };
+                cart.push(cartItem);
+                updateCartBadge();
+                saveUserState();
+                showToast(`${item.name} added to cart`, 'success');
+                const active = document.querySelector('.nav-item.bg-green-600')?.getAttribute('onclick') || '';
+                if (active.includes('dashboard')) renderDashboard();
+            }
+        }
+        function removeFromCart(index) {
+            cart.splice(index, 1);
+            renderCart();
+            updateCartBadge();
+            saveUserState();
+        }
+        function toggleCartSelection(index, checked) {
+            if (!cart[index]) return;
+            cart[index].selected = checked;
+            saveUserState();
+            renderCart();
+        }
+        function toggleWishlist(id) {
+            const index = wishlist.indexOf(id);
+            if (index === -1) {
+                if (!wishlist.includes(id)) {
+                    wishlist.push(id);
+                    showToast('Added to wishlist', 'success');
+                } else {
+                    showToast('Already in wishlist', 'info');
+                }
+            } else {
+                wishlist.splice(index, 1);
+                showToast('Removed from wishlist', 'info');
+            }
+            saveUserState();
+            updateWishlistBadge(); 
+            const active = document.querySelector('.nav-item.bg-green-600')?.getAttribute('onclick') || '';
+            if (active.includes('wishlist')) renderWishlist();
+            if (active.includes('browse')) renderBrowse();
+            if (active.includes('dashboard')) renderDashboard();
+        }
+        function buyNow(id) {
+            const item = livestock.find(i => i._id === id);
+            if (item) {
+                const cartItem = { 
+                    _id: item._id, 
+                    name: item.name, 
+                    price: item.price, 
+                    breed: item.breed, 
+                    type: item.type,
+                    weight: item.weight,
+                    selected: true 
+                };
+                cart = [cartItem]; 
+                updateCartBadge();
+                saveUserState();
+                // Redirect to cart then checkout
+                router('cart');
+                setTimeout(() => checkout(), 300);
+            }
+        }
+        function openAddressModal(index) {
+            editingAddressIndex = index !== undefined ? index : -1;
+            const modal = document.getElementById('address-modal');
+            const title = document.getElementById('address-modal-title');
+            if (!modal) return;
+            if (editingAddressIndex >= 0 && addresses[editingAddressIndex]) {
+                // Edit mode
+                title.innerText = 'Edit Address';
+                const a = addresses[editingAddressIndex];
+                document.getElementById('addr-name').value = a.name || '';
+                document.getElementById('addr-phone').value = a.phone || '';
+                document.getElementById('addr-line').value = a.line1 || a.line || '';
+                document.getElementById('addr-city').value = a.city || '';
+                document.getElementById('addr-state').value = a.state || '';
+                document.getElementById('addr-pincode').value = a.pincode || '';
+            } else {
+                // Add mode
+                title.innerText = 'Add New Address';
+                document.getElementById('address-form').reset();
+            }
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+        function closeAddressModal() {
+            const modal = document.getElementById('address-modal');
+            if (!modal) return;
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            editingAddressIndex = -1;
+        }
+        function editAddress(index) {
+            openAddressModal(index);
+        }
+        async function deleteAddress(index) {
+            if (confirm("Are you sure you want to delete this address?")) {
+                addresses.splice(index, 1);
+                if (addresses.length > 0) {
+                    currentAddress = addresses[0];
+                } else {
+                    currentAddress = null;
+                }
+                await saveUserState();
+                renderAddresses();
+                if(pendingCheckoutItems) renderSummary(); 
+                showToast("Address deleted", "info");
+            }
+        }
+        async function submitAddress(event) {
+            event.preventDefault();
+            const name = document.getElementById('addr-name').value.trim();
+            const phone = document.getElementById('addr-phone').value.trim();
+            const line = document.getElementById('addr-line').value.trim();
+            const city = document.getElementById('addr-city').value.trim();
+            const state = document.getElementById('addr-state').value.trim();
+            const pincode = document.getElementById('addr-pincode').value.trim();
+            if (!name || !phone || !line || !city || !state || !pincode) {
+                showToast('Please fill all address fields.', 'warning');
+                return;
+            }
+            if (!/^[0-9]{10}$/.test(phone)) {
+                showToast('Phone number must be 10 digits.', 'warning');
+                return;
+            }
+            if (!/^[0-9]{6}$/.test(pincode)) {
+                showToast('Pincode must be 6 digits.', 'warning');
+                return;
+            }
+            const addressData = { 
+                name, 
+                phone, 
+                line1: line, 
+                city, 
+                state, 
+                pincode,
+                label: addresses.length === 0 ? 'Default' : `Address ${addresses.length + 1}`
+            };
+            if (editingAddressIndex >= 0) {
+                addresses[editingAddressIndex] = { ...addresses[editingAddressIndex], ...addressData };
+                showToast('Address updated', 'success');
+            } else {
+                addresses.push(addressData);
+                showToast('Address added', 'success');
+            }
+            if (!currentAddress || editingAddressIndex === 0) {
+                currentAddress = addresses[0];
+            }
+            await saveUserState(); 
+            renderAddresses();
+            closeAddressModal();
+            // If we were in checkout flow, refresh summary
+            if (pendingCheckoutItems && pendingCheckoutItems.length > 0) {
+                renderSummary();
+            }
+        }
+        
+        // --- CHECKOUT & SUMMARY LOGIC ---
+        async function checkout() {
+            if (cart.length === 0) {
+                showToast('Your cart is empty.', 'warning');
+                return;
+            }
+            const itemsToBuy = cart.filter(item => item.selected !== false);
+            if (itemsToBuy.length === 0) {
+                showToast('Please select at least one item to checkout.', 'warning');
+                return;
+            }
+            
+            pendingCheckoutItems = itemsToBuy;
+            
+            if (addresses.length === 0) {
+                openAddressModal();
+                return;
+            }
+            if (!currentAddress && addresses.length > 0) {
+                currentAddress = addresses[0];
+            }
+            
+            // Go to Summary View instead of direct payment
+            router('summary');
+            renderSummary();
+        }
+        
+        function renderSummary() {
+            if(!pendingCheckoutItems) return;
+            
+            const addrListContainer = document.getElementById('summary-address-list');
+            const itemsContainer = document.getElementById('summary-items');
+            const subtotalEl = document.getElementById('summary-subtotal');
+            const totalEl = document.getElementById('summary-total');
+            
+            // Render Address Selection List
+            if (addresses.length > 0) {
+                addrListContainer.innerHTML = addresses.map((addr, idx) => {
+                    const isChecked = currentAddress === addr || (currentAddress && currentAddress.name === addr.name && currentAddress.line1 === addr.line1); 
+                    // Fallback comparison if object reference changed
+                    if(isChecked) currentAddress = addr; // Sync reference
+
+                    return `
+                    <label class="flex items-start gap-3 border p-3 rounded-lg cursor-pointer hover:bg-gray-50 transition ${isChecked ? 'border-green-500 bg-green-50' : 'border-gray-200'}">
+                        <input type="radio" name="selectedAddress" class="mt-1" ${isChecked ? 'checked' : ''} onchange="selectAddress(${idx})">
+                        <div class="text-sm text-gray-700">
+                            <p class="font-bold text-gray-900">${addr.name}, <span class="font-normal text-gray-500">+91 ${addr.phone}</span></p>
+                            <p>${addr.line1 || addr.line}</p>
+                            <p>${addr.city}, ${addr.state} - ${addr.pincode}</p>
+                        </div>
+                    </label>
+                    `;
+                }).join('');
+            } else {
+                addrListContainer.innerHTML = `<p class="text-red-500 text-sm">No address found. Please add one.</p>`;
+            }
+            
+            // Render Items
+            let total = 0;
+            itemsContainer.innerHTML = pendingCheckoutItems.map(item => {
+                total += (item.price || 0);
+                const imageUrl = `${API_URL}/livestock/image/${item._id}`;
+                return `
+                    <div class="flex gap-4 border-b pb-4 last:border-0 last:pb-0">
+                         <div class="w-16 h-16 bg-gray-100 rounded-lg flex-shrink-0 overflow-hidden border border-gray-200">
+                             <img src="${imageUrl}" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='https://via.placeholder.com/64?text=Img';">
+                         </div>
+                         <div class="flex-1">
+                             <p class="font-bold text-gray-800">${item.name}</p>
+                             <p class="text-xs text-gray-500">Type: ${item.type || 'N/A'}</p> <p class="text-xs text-gray-500">Breed: ${item.breed}</p>
+                             <p class="text-xs text-gray-500">Weight: ${item.weight ? item.weight + ' kg' : 'N/A'}</p>
+                         </div>
+                         <p class="font-bold text-gray-800">${formatINR(item.price)}</p>
+                    </div>
+                `;
+            }).join('');
+            
+            subtotalEl.innerText = formatINR(total);
+            totalEl.innerText = formatINR(total);
+        }
+
+        function selectAddress(index) {
+            currentAddress = addresses[index];
+            renderSummary(); // Re-render to update styles
+        }
+        
+        async function proceedToPayment() {
+            if(!pendingCheckoutItems || pendingCheckoutItems.length === 0) return;
+            if(!currentAddress) {
+                showToast('Please select a delivery address', 'error');
+                return;
+            }
+            await createOrder(pendingCheckoutItems);
+        }
+
+        async function createOrder(itemsToBuy) {
+            const total = itemsToBuy.reduce((sum, item) => sum + (item.price || 0), 0);
+            try {
+                const payRes = await fetch(`${API_URL}/payment/create`, {
+                    method: "POST",
+                    credentials: "include",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ amount: total })
+                });
+                const payData = await payRes.json();
+                if (!payRes.ok) {
+                    showToast(payData.message || 'Failed to start payment', 'error');
+                    return;
+                }
+                showPaymentUI(payData.upiString, payData.paymentId, itemsToBuy, total);
+            } catch (err) {
+                console.error('createOrder error', err);
+                showToast('Payment initiation failed', 'error');
+            }
+        }
+        
+        // --- TRACK ORDER LOGIC ---
+        function openTrackModal(orderId) {
+            const order = orders.find(o => o._id === orderId);
+            if(!order) return;
+            
+            const modal = document.getElementById('track-modal');
+            const content = document.getElementById('track-content');
+            
+            const steps = [
+                { status: 'Processing', label: 'Order Placed & Processing' },
+                { status: 'Shipped', label: 'Shipped' },
+                { status: 'Delivered', label: 'Delivered' }
+            ];
+            
+            let currentStepIndex = steps.findIndex(s => s.status === order.status);
+            if(currentStepIndex === -1) currentStepIndex = 0; 
+            
+            const itemsList = order.items.map(i => `<li class="text-sm text-gray-600">${i.name} (${i.breed || ''})</li>`).join('');
+            
+            const stepsHtml = steps.map((s, idx) => {
+                const isActive = idx <= currentStepIndex;
+                const isCurrent = idx === currentStepIndex;
+                const colorClass = isActive ? 'bg-green-600 border-green-600 text-white' : 'bg-white border-gray-300 text-gray-400';
+                
+                return `
+                <div class="flex items-start gap-4 relative">
+                    <div class="flex flex-col items-center">
+                        <div class="w-8 h-8 rounded-full border-2 flex items-center justify-center z-10 ${colorClass}">
+                            ${isActive ? '<i data-lucide="check" class="w-4 h-4"></i>' : (idx + 1)}
+                        </div>
+                        ${idx < steps.length - 1 ? `<div class="w-0.5 h-10 ${isActive ? 'bg-green-600' : 'bg-gray-200'} -my-1"></div>` : ''}
+                    </div>
+                    <div class="pt-1">
+                        <p class="font-semibold ${isActive ? 'text-gray-900' : 'text-gray-400'}">${s.label}</p>
+                        ${isCurrent ? '<p class="text-xs text-green-600">Current Status</p>' : ''}
+                    </div>
+                </div>
+                `;
+            }).join('');
+            
+            content.innerHTML = `
+                <div class="border-b pb-4 mb-4">
+                    <p class="font-bold">Order #${String(order._id).slice(-6)}</p>
+                    <ul class="list-disc pl-5 mt-2 space-y-1">${itemsList}</ul>
+                </div>
+                <div class="space-y-0">
+                    ${stepsHtml}
+                </div>
+            `;
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            lucide.createIcons();
+        }
+
+        function closeTrackModal() {
+            const modal = document.getElementById('track-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function updateCartBadge() {
+            const badges = [document.getElementById('cart-badge'), document.getElementById('header-cart-badge')];
+            badges.forEach(b => {
+                if (!b) return;
+                b.innerText = cart.length;
+                if (cart.length > 0) b.classList.remove('hidden');
+                else b.classList.add('hidden');
+            });
+        }
+        
+        function updateWishlistBadge() {
+            const badge = document.getElementById('wishlist-badge');
+            if (!badge) return;
+            badge.innerText = getVisibleWishlistCount();
+            if (getVisibleWishlistCount() > 0) badge.classList.remove('hidden');
+            else badge.classList.add('hidden');
+        }
+
+        function getStatusColor(status) {
+            if (status === 'Shipped') return 'bg-blue-100 text-blue-700';
+            if (status === 'Delivered') return 'bg-gray-800 text-white';
+            if (status === 'Processing') return 'bg-yellow-100 text-yellow-800';
+            if (status === 'Cancelled') return 'bg-red-100 text-red-700';
+            return 'bg-gray-100 text-gray-800';
+        }
+        // --- INIT APP ---
+        function initApp() {
+            if (appInitialized) return;
+            appInitialized = true;
+            updateCartBadge();
+            updateWishlistBadge(); 
+            updateNotificationBadge(); 
+            const dateOptions = { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' };
+            const dateEl = document.getElementById('current-date');
+            if (dateEl) {
+                dateEl.innerText = new Date().toLocaleDateString('en-IN', dateOptions);
+            }
+            router('dashboard');
+            
+            // Auto-refresh data every 2 seconds
+            autoRefreshInterval = setInterval(() => {
+                loadData();
+            }, 2000);
+            
+            initPullToRefresh();
+        }
+
+        // --- PULL TO REFRESH LOGIC ---
+        function initPullToRefresh() {
+            let startY = 0;
+            let currentY = 0;
+            let isDragging = false;
+            const threshold = 120; // Drag distance needed
+            const indicator = document.getElementById('pull-refresh-indicator');
+            const container = document.getElementById('content-area'); // or document.body
+            
+            if(!container) return;
+
+            container.addEventListener('touchstart', (e) => {
+                if (container.scrollTop <= 0) {
+                    startY = e.touches[0].clientY;
+                    isDragging = true;
+                }
+            }, { passive: true });
+
+            container.addEventListener('touchmove', (e) => {
+                if (!isDragging) return;
+                currentY = e.touches[0].clientY;
+                const diff = currentY - startY;
+
+                if (diff > 0 && container.scrollTop <= 0) {
+                    // Pulling down at top
+                    if (diff > threshold) {
+                        indicator.style.top = '20px'; // Show indicator
+                        indicator.querySelector('.spinner').style.transform = `rotate(${diff}deg)`;
+                    } else {
+                         // Dragging but not enough
+                         indicator.style.top = (diff / 2 - 50) + 'px'; 
+                    }
+                }
+            }, { passive: true });
+
+            container.addEventListener('touchend', (e) => {
+                if (!isDragging) return;
+                const diff = currentY - startY;
+                isDragging = false;
+                
+                if (diff > threshold && container.scrollTop <= 0) {
+                    // Trigger reload
+                    indicator.style.top = '20px';
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 500);
+                } else {
+                    // Reset
+                    indicator.style.top = '-50px';
+                }
+                startY = 0;
+                currentY = 0;
+            });
+        }
+
+        function attachEventListeners() {
+            const loginForm = document.getElementById('login-form');
+            const registerForm = document.getElementById('register-form');
+            if (loginForm) loginForm.addEventListener('submit', handleLogin);
+            if (registerForm) registerForm.addEventListener('submit', handleRegister);
+            
+            document.addEventListener('click', (e) => {
+                // Close Profile Menu
+                const menu = document.getElementById('profile-menu');
+                const btn = document.getElementById('profile-button');
+                if (menu && btn) {
+                    if (!menu.contains(e.target) && !btn.contains(e.target)) {
+                        toggleProfileMenu(false);
+                    }
+                }
+
+                // Close Notification Menu
+                const notifMenu = document.getElementById('notification-menu');
+                const notifBtn = document.getElementById('notification-button');
+                if (notifMenu && notifBtn) {
+                    if (!notifMenu.contains(e.target) && !notifBtn.contains(e.target)) {
+                        toggleNotificationMenu(false);
+                    }
+                }
+            });
+        }
+        document.addEventListener('DOMContentLoaded', () => {
+            attachEventListeners();
+            checkAuth();
+            lucide.createIcons();
+        });
+        // --- PAYMENT UI / CONFIRM HELPERS ---
+        function showPaymentUI(upiString, paymentId, itemsToBuy, total) {
+            document.querySelectorAll('.lm-pay-popup').forEach(e => e.remove());
+            const payBox = document.createElement("div");
+            payBox.className = "lm-pay-popup fixed inset-0 flex items-center justify-center bg-black/60 z-50 px-4";
+            payBox.innerHTML = `
+                <div class="bg-white w-full max-w-md p-6 rounded-2xl text-gray-800">
+                    <h2 class="text-xl font-bold mb-3">Complete Payment</h2>
+                    <p class="text-sm text-gray-500 mb-6">Choose your preferred UPI app.</p>
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <a href="${upiString}" class="pay-icon-btn flex flex-col items-center justify-center p-4 border rounded-xl hover:bg-purple-50 transition">
+                            <img src="https://uxwing.com/wp-content/themes/uxwing/download/brands-and-social-media/phonepe-icon.png" alt="PhonePe" class="w-12 h-12 mb-2 object-contain">
+                        </a>
+                        <a href="${upiString}" class="pay-icon-btn flex flex-col items-center justify-center p-4 border rounded-xl hover:bg-blue-50 transition">
+                            <img src="https://uxwing.com/wp-content/themes/uxwing/download/brands-and-social-media/google-pay-icon.png" alt="GPay" class="w-12 h-12 mb-2 object-contain">
+                        </a>
+                        <a href="${upiString}" class="pay-icon-btn flex flex-col items-center justify-center p-4 border rounded-xl hover:bg-blue-50 transition">
+                            <img src="https://uxwing.com/wp-content/themes/uxwing/download/brands-and-social-media/paytm-icon.png" alt="Paytm" class="w-12 h-12 mb-2 object-contain">
+                        </a>
+                        <a href="${upiString}" class="pay-icon-btn flex flex-col items-center justify-center p-4 border rounded-xl hover:bg-orange-50 transition">
+                            <img src="https://uxwing.com/wp-content/themes/uxwing/download/brands-and-social-media/bhim-upi-icon.png" alt="BHIM" class="w-12 h-12 mb-2 object-contain" onerror="this.src='https://placehold.co/100x100/orange/white?text=BHIM'">
+                        </a>
+                    </div>
+                    <div class="mt-4 text-center">
+                        <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(upiString)}" class="mx-auto rounded-lg border shadow-sm"/>
+                        <p class="text-xs text-gray-500 mt-3 font-semibold">Scan & Pay • Amount: ₹${total}</p>
+                    </div>
+                    <button id="lm-paid-btn" class="w-full bg-green-600 text-white py-3 mt-6 rounded-xl font-bold text-lg shadow-lg hover:bg-green-700 transition transform active:scale-95">
+                        I Have Paid
+                    </button>
+                    <button id="lm-cancel-btn" class="w-full text-gray-500 mt-3 text-sm font-medium hover:text-gray-700">Cancel Payment</button>
+                </div>
+            `;
+            document.body.appendChild(payBox);
+            document.getElementById('lm-paid-btn').onclick = function() {
+                confirmPayment(paymentId, itemsToBuy, total);
+            };
+            document.getElementById('lm-cancel-btn').onclick = function() {
+                document.querySelectorAll('.lm-pay-popup').forEach(e => e.remove());
+            };
+        }
+        async function confirmPayment(paymentId, items, total) {
+            try {
+                const res = await fetch(`${API_URL}/payment/confirm`, {
+                    method: "POST",
+                    credentials: "include",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ paymentId })
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    showToast(data.message || 'Payment not verified', 'error');
+                    return;
+                }
+                
+                const ordRes = await fetch(`${API_URL}/orders`, {
+                    method: "POST",
+                    credentials: "include",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        // FIXED: Pass weight and use _id correctly
+                        items: items.map(i => ({ _id: i._id, name: i.name, price: i.price, breed: i.breed, weight: i.weight })),
+                        total,
+                        date: new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                        address: currentAddress,
+                        status: "Processing"
+                    })
+                });
+                if (!ordRes.ok) {
+                    const err = await ordRes.json();
+                    showToast(err.message || 'Order creation failed', 'error');
+                    return;
+                }
+                
+                cart = [];
+                pendingCheckoutItems = null; 
+                await saveUserState(); 
+                showToast('Payment Successful! Order Placed.', 'success');
+                
+                document.querySelectorAll('.lm-pay-popup').forEach(e => e.remove());
+                
+                await loadData();
+                router('orders');
+            } catch (err) {
+                console.error('confirmPayment error', err);
+                showToast('Payment confirmation failed', 'error');
+            }
+        }
+        async function cancelOrder(id) {
+            try {
+                const res = await fetch(`${API_URL}/orders/${id}/cancel`, {
+                    method: "PUT",
+                    credentials: "include"
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    showToast(data.message || 'Cancel failed', 'error');
+                    return;
+                }
+                showToast('Order cancelled', 'success');
+                await loadData();
+                router('orders');
+            } catch (err) {
+                console.error('cancelOrder error', err);
+                showToast('Cancel failed', 'error');
+            }
+        }
+    </script>
+    <script>
+    (function(){
+      // animatePage: adds page-enter classes then activates
+      window.animatePage = function(viewId){
+        try {
+          const view = document.getElementById(viewId);
+          if(!view) return;
+          view.classList.add("page-enter");
+          requestAnimationFrame(()=> {
+            view.classList.add("page-enter-active");
+            setTimeout(()=> {
+              view.classList.remove("page-enter", "page-enter-active");
+            }, 800);
+          });
+        } catch(e){ console.error("animatePage error", e); }
+      };
+
+      // Reveal observer for cards
+      const revealObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("reveal-visible");
+            revealObserver.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.18 });
+
+      window.applyRevealAndPremium = function(){
+        try {
+          const grid = document.getElementById('livestock-grid');
+          if(!grid) return;
+          Array.from(grid.children).forEach(el => {
+            el.classList.add('reveal','card-premium');
+            revealObserver.observe(el);
+          });
+        } catch(e){ console.error("applyReveal error", e); }
+      };
+
+      if (window.router) {
+        const __old_router = window.router.bind(window);
+        window.router = function(viewName){
+          try {
+            __old_router(viewName);
+          } catch(e){
+            console.error("router wrapper old failed", e);
+          }
+          try {
+            animatePage('view-' + viewName);
+          } catch(e){ /* ignore */ }
+          if (viewName === 'browse') {
+            setTimeout(() => { applyRevealAndPremium(); }, 100);
+          } else {
+            setTimeout(() => { applyRevealAndPremium(); }, 200);
+          }
+          setTimeout(() => {
+            document.querySelectorAll('button:not(.btn-press)').forEach(b => b.classList.add('btn-press'));
+            document.querySelectorAll('.bg-green-600, .bg-gray-900').forEach(b => b.classList.add('btn-glow'));
+          }, 150);
+        };
+      } else {
+        const waitRouter = setInterval(() => {
+          if (window.router) {
+            clearInterval(waitRouter);
+            const __old_router = window.router.bind(window);
+            window.router = function(viewName){
+              try { __old_router(viewName); } catch(e){}
+              try { animatePage('view-' + viewName); } catch(e){}
+              if (viewName === 'browse') setTimeout(() => { applyRevealAndPremium(); }, 100);
+              else setTimeout(() => { applyRevealAndPremium(); }, 200);
+              setTimeout(() => {
+                document.querySelectorAll('button:not(.btn-press)').forEach(b => b.classList.add('btn-press'));
+                document.querySelectorAll('.bg-green-600, .bg-gray-900').forEach(b => b.classList.add('btn-glow'));
+              }, 150);
+            };
+          }
+        }, 150);
+      }
+
+      if (window.showToast) {
+        const _oldToast = window.showToast.bind(window);
+        window.showToast = function(message, type){
+          _oldToast(message, type);
+          setTimeout(() => {
+            try {
+              const container = document.getElementById('toast-container');
+              if (!container) return;
+              const last = container.lastElementChild;
+              if (last) last.classList.add('toast-anim');
+            } catch(e){ console.error("toast patch error", e); }
+          }, 10);
+        };
+      } else {
+        const waitToast = setInterval(() => {
+          if (window.showToast) {
+            clearInterval(waitToast);
+            const _oldToast = window.showToast.bind(window);
+            window.showToast = function(message, type){
+              _oldToast(message, type);
+              setTimeout(() => {
+                try {
+                  const container = document.getElementById('toast-container');
+                  if (!container) return;
+                  const last = container.lastElementChild;
+                  if (last) last.classList.add('toast-anim');
+                } catch(e){}
+              }, 120);
+            };
+          }
+        }, 120);
+      }
+      document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('button:not(.btn-press)').forEach(b => b.classList.add('btn-press'));
+        document.querySelectorAll('.bg-green-600, .bg-gray-900').forEach(b => b.classList.add('btn-glow'));
+        setTimeout(() => { applyRevealAndPremium(); }, 300);
+      });
+    })();
+        // ... [Existing script setup remains the same] ...
+
+// --- UPDATED: CART WITH DUPLICATE CHECK ---
+function addToCart(id) {
+    // Check if item already exists in cart
+    const exists = cart.some(item => item._id === id);
+    if (exists) {
+        showToast('This item is already in your cart', 'warning');
+        return;
+    }
+
+    const item = livestock.find(i => i._id === id);
+    if (item) {
+        const cartItem = { 
+            _id: item._id, 
+            name: item.name, 
+            price: item.price, 
+            breed: item.breed, 
+            type: item.type, // Ensure type is captured
+            selected: true 
+        };
+        cart.push(cartItem);
+        updateCartBadge();
+        saveUserState();
+        showToast(`${item.name} added to cart`, 'success');
+        
+        // Refresh dashboard if visible
+        const active = document.querySelector('.nav-item.bg-green-600')?.getAttribute('onclick') || '';
+        if (active.includes('dashboard')) renderDashboard();
+    }
+}
+
+// --- UPDATED: WISHLIST TOGGLE FIX ---
+async function toggleWishlist(id) {
+    const index = wishlist.indexOf(id);
+    if (index === -1) {
+        wishlist.push(id);
+        showToast('Added to wishlist', 'success');
+    } else {
+        wishlist.splice(index, 1);
+        showToast('Removed from wishlist', 'info');
+    }
+    
+    // Save state to MongoDB for persistence
+    await saveUserState(); 
+    updateWishlistBadge(); 
+    
+    // Re-render views to reflect the UI change immediately
+    renderBrowse();
+    renderWishlist();
+    renderDashboard();
+}
+
+// --- UPDATED: CONFIRM PAYMENT (Adds Type to Order) ---
+async function confirmPayment(paymentId, items, total) {
+    try {
+        const res = await fetch(`${API_URL}/payment/confirm`, {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ paymentId })
+        });
+        const data = await res.json();
+        
+        if (!res.ok || !data.success) {
+            showToast(data.message || 'Payment not verified', 'error');
+            return;
+        }
+
+        // Create order with full item details including TYPE
+        const ordRes = await fetch(`${API_URL}/orders`, {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                items: items.map(i => ({ 
+                    id: i._id, 
+                    name: i.name, 
+                    price: i.price, 
+                    breed: i.breed,
+                    type: i.type // Persisting type in order history
+                })),
+                total,
+                date: new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                address: currentAddress,
+                status: "Processing"
+            })
+        });
+
+        if (!ordRes.ok) {
+            const err = await ordRes.json();
+            showToast(err.message || 'Order creation failed', 'error');
+            return;
+        }
+
+        cart = [];
+        await saveUserState(); 
+        showToast('Payment Successful! Order Placed.', 'success');
+        document.querySelectorAll('.lm-pay-popup').forEach(e => e.remove());
+        await loadData();
+        router('orders');
+    } catch (err) {
+        console.error('confirmPayment error', err);
+        showToast('Payment confirmation failed', 'error');
+    }
+}
+
+// --- UPDATED: RENDER ORDERS (Displays Type) ---
+function renderOrders() {
+    const container = document.getElementById('orders-list-full');
+    if (!container) return;
+    if (orders.length === 0) {
+        container.innerHTML = '<div class="text-center text-gray-500">No past orders.</div>';
+        return;
+    }
+    container.innerHTML = orders.map(o => {
+        // Updated itemsHtml to show Type
+        const itemsHtml = (o.items || []).map(i => `
+            <div class="flex justify-between border-b border-gray-50 py-1">
+                <span>${i.name} <span class="text-xs text-gray-400">(${i.type || 'Livestock'})</span></span>
+                <span class="text-gray-600 font-medium">₹${formatINR(i.price)}</span>
+            </div>
+        `).join('');
+        
+        const addressHtml = o.address ? `
+            <div class="text-xs">
+                <strong>Ship to:</strong> ${o.address.name}<br>
+                ${o.address.line || o.address.line1}, ${o.address.city}, ${o.address.pincode}
+            </div>` : '';
+
+        return `
+            <div class="bg-white p-4 rounded-xl border border-gray-100 mb-4 shadow-sm">
+                <div class="flex justify-between items-start mb-3">
+                    <div>
+                        <p class="font-bold text-gray-800">Order #${String(o._id).slice(-6)}</p>
+                        <p class="text-[10px] text-gray-400 uppercase tracking-wider">${o.date}</p>
+                    </div>
+                    <span class="text-xs px-2 py-1 ${getStatusColor(o.status)} rounded-full font-semibold">${o.status}</span>
+                </div>
+                <div class="space-y-1 mb-3">${itemsHtml}</div>
+                <div class="flex justify-between items-end pt-2 border-t border-gray-100">
+                    ${addressHtml}
+                    <div class="text-right">
+                        <p class="text-xs text-gray-500">Total Paid</p>
+                        <p class="font-bold text-emerald-700 text-lg">${formatINR(o.total)}</p>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+    lucide.createIcons();
+}
+    </script>
+</body>
+</html>
