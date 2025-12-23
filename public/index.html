@@ -43,38 +43,30 @@
   .lm-pop { transform: scale(.98); opacity: 0; transition: transform 260ms cubic-bezier(.2,.9,.2,1), opacity 260ms; }
   .lm-pop.lm-show { transform: scale(1); opacity: 1; }
 </style>
-
 <style>
 /* Page transition */
 .page-enter { opacity: 0; transform: translateY(20px); }
 .page-enter-active { opacity: 1; transform: translateY(0); transition: all .6s cubic-bezier(.16,.67,.43,1); }
-
 /* Card hover premium */
 .card-premium { transition: transform .35s cubic-bezier(.2,.9,.2,1), box-shadow .35s; }
 .card-premium:hover { transform: translateY(-6px) scale(1.03); box-shadow: 0 18px 40px rgba(0,0,0,0.15); }
-
 /* Scroll reveal */
 .reveal { opacity: 0; transform: translateY(25px); transition: all .7s cubic-bezier(.2,.9,.2,1); }
 .reveal-visible { opacity: 1; transform: translateY(0); }
-
 /* Toast slide/fade */
 .toast-anim { transform: translateX(20px); opacity: 0; animation: toastIn .4s forwards, toastOut .4s forwards 3s; }
 @keyframes toastIn { to { transform: translateX(0); opacity: 1; } }
 @keyframes toastOut { to { transform: translateX(30px); opacity: 0; } }
-
 /* Button press & glow */
 .btn-press { transition: transform .15s ease, box-shadow .3s ease; }
 .btn-press:active { transform: scale(.96); }
 .btn-glow:hover { box-shadow: 0 0 12px rgba(16,185,129,0.6); }
-
 /* Shimmer skeleton */
 .skeleton { background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%); background-size: 200% 100%; animation: shimmer 1.4s infinite; }
 @keyframes shimmer { 100% { background-position: -200% 0; } }
-
 /* small utility */
 .lm-fadein { opacity: 0; transform: translateY(12px); transition: opacity .4s, transform .4s; }
 .lm-fadein.lm-show { opacity: 1; transform: translateY(0); }
-
 </style>
 </head>
 <body class="h-screen bg-gray-900 text-gray-100">
@@ -301,7 +293,6 @@
                         </div>
                     </div>
                     <!-- END: Notification Bell & Menu -->
-
                     <div class="relative cursor-pointer" onclick="router('cart')">
                         <i data-lucide="shopping-cart" class="w-6 h-6 text-gray-600"></i>
                         <span id="header-cart-badge" class="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full hidden">0</span>
@@ -475,16 +466,13 @@
         let currentAddress = null;
         let pendingCheckoutItems = null;
         let editingAddressIndex = -1;
-        
         // --- NOTIFICATION STATE & PERSISTENCE FIX ---
         // Load notifications from local storage
         let notifications = JSON.parse(localStorage.getItem('lm_notifications') || '[]');
-        
         // Load baselines from local storage, defaulting if not found
         let previousLivestockCount = parseInt(localStorage.getItem('lm_prev_ls_count') || '0');
         let previousOrdersSnapshot = localStorage.getItem('lm_prev_orders_snap') || '[]';
         // --------------------------------------------
-        
         // --- Toast popup ---
         function showToast(message, type = 'info') {
             const container = document.getElementById('toast-container');
@@ -532,12 +520,10 @@
             // Returns the count of items in the wishlist array that still exist in the current livestock list.
             return wishlist.filter(id => livestock.some(item => item._id === id)).length;
         }
-        
         // --- NOTIFICATION UI HELPERS (FIXED PERSISTENCE) ---
         function saveNotifications() {
             localStorage.setItem('lm_notifications', JSON.stringify(notifications));
         }
-
         function updateNotificationBadge() {
             const badge = document.getElementById('notification-badge');
             const clearBtn = document.getElementById('clear-all-btn');
@@ -552,11 +538,9 @@
                 if (clearBtn) clearBtn.disabled = true;
             }
         }
-
         function renderNotifications() {
             const list = document.getElementById('notification-list');
             if (!list) return;
-
             if (notifications.length === 0) {
                 list.innerHTML = `<p class="text-center text-xs text-gray-400 py-4" id="no-notifications-msg">No new notifications.</p>`;
             } else {
@@ -579,13 +563,10 @@
             updateNotificationBadge();
             lucide.createIcons();
         }
-
         function toggleNotificationMenu(force) {
             const menu = document.getElementById('notification-menu');
             if (!menu) return;
-
             const isHidden = menu.classList.contains('hidden');
-
             if (typeof force === 'boolean') {
                 if (force) {
                     menu.classList.remove('hidden', 'scale-95', 'opacity-0');
@@ -597,7 +578,6 @@
                 }
                 return;
             }
-
             if (isHidden) {
                 renderNotifications();
                 menu.classList.remove('hidden', 'scale-95', 'opacity-0');
@@ -608,13 +588,11 @@
                 setTimeout(() => menu.classList.add('hidden'), 300); 
             }
         }
-
         function removeNotification(id) { 
             notifications = notifications.filter(n => n.id !== id);
             saveNotifications();
             renderNotifications();
         }
-
         function clearAllNotifications() {
             notifications = [];
             saveNotifications(); 
@@ -622,7 +600,6 @@
             showToast('All notifications cleared.', 'info');
         }
         // ----------------------------------------------------
-
         // --- USER STATE MANAGEMENT (MongoDB) ---
         async function loadUserState() {
             if (!currentUser || !currentUser.id) return;
@@ -824,12 +801,10 @@
             addresses = [];
             currentAddress = null;
             notifications = []; 
-            
             // Clear baselines in local storage upon logout
             localStorage.removeItem('lm_notifications');
             localStorage.removeItem('lm_prev_ls_count');
             localStorage.removeItem('lm_prev_orders_snap');
-
             updateCartBadge();
             updateWishlistBadge(); 
             updateNotificationBadge(); 
@@ -847,9 +822,7 @@
                     const data = await res.json();
                     currentUser = data.user;
                     await loadUserState(); // Load persistent state
-                    
                     // Initial setup of data and baselines happens in router call via initApp
-                    
                     updateProfileUI();
                     showApp();
                 } else {
@@ -864,15 +837,12 @@
         async function loadData() {
             let fetchedOrders = orders;
             let fetchedLivestock = livestock;
-            
             // Determine if this is the first functional load (baseline is 0/empty)
             const isBaselineInitialized = previousLivestockCount > 0 || JSON.parse(previousOrdersSnapshot).length > 0;
-            
             try {
                 // 1. Fetch Livestock
                 const lsRes = await fetch(`${API_URL}/livestock`);
                 fetchedLivestock = await lsRes.json();
-                
                 // Notification Logic: New Livestock Added
                 if (isBaselineInitialized && fetchedLivestock.length > previousLivestockCount) {
                     const newCount = fetchedLivestock.length - previousLivestockCount;
@@ -885,7 +855,6 @@
                         timestamp: Date.now()
                     });
                 }
-                
                 // 2. Fetch User-specific data (if logged in)
                 if (currentUser) {
                     const ordRes = await fetch(`${API_URL}/orders`, {
@@ -893,13 +862,11 @@
                         credentials: 'include'
                     });
                     fetchedOrders = await ordRes.json();
-
                     // Notification Logic: Order Status Change
                     const previousOrderMap = JSON.parse(previousOrdersSnapshot).reduce((acc, o) => {
                         acc[o._id] = o.status;
                         return acc;
                     }, {});
-
                     if (isBaselineInitialized) {
                         let statusChanged = false;
                         fetchedOrders.forEach(newOrder => {
@@ -922,30 +889,23 @@
             } catch (e) {
                 console.error("API Error during loadData", e);
             }
-            
             // 3. Update global state and baselines
             livestock = fetchedLivestock;
             orders = fetchedOrders;
-            
             // Always save baselines for the next check, whether notifications were generated or not.
             previousLivestockCount = livestock.length;
             localStorage.setItem('lm_prev_ls_count', livestock.length);
-
             previousOrdersSnapshot = JSON.stringify(orders.map(o => ({ _id: o._id, status: o.status })));
             localStorage.setItem('lm_prev_orders_snap', previousOrdersSnapshot);
-            
             // Save notifications generated in this run
             saveNotifications();
-
             // CLEANUP FIX: Filter out stale IDs from wishlist
             const validLivestockIds = livestock.map(item => item._id);
             const cleanedWishlist = wishlist.filter(id => validLivestockIds.includes(id));
-
             if (cleanedWishlist.length !== wishlist.length) {
                 wishlist = cleanedWishlist;
                 await saveUserState();
             }
-            
             // Get current active view to re-render
             const activeNav = document.querySelector('.nav-item.bg-green-600');
             let currentView = 'dashboard';
@@ -953,14 +913,12 @@
                 const onclick = activeNav.getAttribute('onclick') || "";
                 currentView = onclick.replace("router('", "").replace("')", "") || 'dashboard';
             }
-            
             // Only re-render the active view
             if (currentView === 'dashboard') renderDashboard();
             if (currentView === 'browse') renderBrowse();
             if (currentView === 'orders') renderOrders();
             if (currentView === 'cart') renderCart();
             if (currentView === 'wishlist') renderWishlist();
-
             updateWishlistBadge(); 
             updateNotificationBadge(); 
         }
@@ -968,19 +926,16 @@
         function router(viewName) {
             // Load fresh data before rendering the new view
             loadData();
-            
             const titles = {
                 'dashboard': 'My Dashboard', 'browse': 'Browse Livestock', 'cart': 'Shopping Cart',
                 'orders': 'My Orders', 'wishlist': 'My Wishlist', 'addresses': 'Addresses',
                 'profile': 'My Profile', 'support': 'Support'
             };
             document.getElementById('page-title').innerText = titles[viewName] || 'Dashboard';
-            
             const views = ['dashboard', 'browse', 'cart', 'orders', 'wishlist', 'addresses', 'profile', 'support'];
             views.forEach(v => document.getElementById(`view-${v}`)?.classList.add('hidden'));
             const activeView = document.getElementById(`view-${viewName}`);
             if (activeView) activeView.classList.remove('hidden');
-            
             document.querySelectorAll('.nav-item').forEach(btn => {
                 if (btn.getAttribute('onclick').includes(viewName)) {
                     btn.classList.add('bg-green-600', 'text-white');
@@ -990,7 +945,6 @@
                     btn.classList.add('text-gray-600', 'hover:bg-gray-100');
                 }
             });
-            
             // The views are re-rendered in loadData(), but we call them here as well in case loadData is slow
             if (viewName === 'dashboard') renderDashboard();
             if (viewName === 'browse') renderBrowse();
@@ -998,11 +952,9 @@
             if (viewName === 'orders') renderOrders();
             if (viewName === 'wishlist') renderWishlist();
             if (viewName === 'addresses') renderAddresses();
-            
             updateCartBadge(); 
             updateWishlistBadge(); 
             updateNotificationBadge(); 
-
             lucide.createIcons();
         }
         // --- RENDER FUNCTIONS ---
@@ -1010,10 +962,8 @@
             const totalSpent = orders.reduce((sum, order) => sum + (order.total || 0), 0);
             document.getElementById('dash-total-spent').innerText = formatINR(totalSpent);
             document.getElementById('dash-total-orders').innerText = orders.length;
-            
             // FIX: Use the visible count helper for the dashboard stat
             document.getElementById('dash-total-wishlist').innerText = getVisibleWishlistCount(); 
-            
             document.getElementById('dash-total-cart').innerText = cart.length; 
             document.getElementById('dash-total-livestock').innerText = livestock.length;
             const recentContainer = document.getElementById('dash-recent-orders');
@@ -1144,7 +1094,10 @@
                 return;
             }
             container.innerHTML = orders.map(o => {
-                const itemsHtml = (o.items || []).map(i => `<div>${i.name} (${i.breed}) - ₹${formatINR(i.price)}</div>`).join('');
+                const itemsHtml = (o.items || []).map(i => {
+                    const type = i.type ? i.type : 'Livestock';
+                    return `<div>${i.name} (${i.breed} • ${type}) - ₹${formatINR(i.price)}</div>`;
+                }).join('');
                 const addressHtml = o.address ? `<div><strong>Ship to:</strong> ${o.address.name}, +91 ${o.address.phone}</div>
                     <div>${o.address.line1 || o.address.line || ''} ${o.address.line2 ? '<br/>'+o.address.line2 : ''}</div>
                     <div>${o.address.city || ''}, ${o.address.state || ''} - ${o.address.pincode || ''}</div>` : '';
@@ -1237,22 +1190,29 @@
         // --- CART / WISHLIST / CHECKOUT ACTIONS ---
         function addToCart(id) {
             const item = livestock.find(i => i._id === id);
-            if (item) {
-                const cartItem = { 
-                    _id: item._id, 
-                    name: item.name, 
-                    price: item.price, 
-                    breed: item.breed, 
-                    type: item.type, 
-                    selected: true 
-                };
-                cart.push(cartItem);
-                updateCartBadge();
-                saveUserState();
-                showToast(`${item.name} added to cart`, 'success');
-                const active = document.querySelector('.nav-item.bg-green-600')?.getAttribute('onclick') || '';
-                if (active.includes('dashboard')) renderDashboard();
+            if (!item) return;
+
+            // Prevent duplicates
+            const alreadyInCart = cart.some(cartItem => cartItem._id === id);
+            if (alreadyInCart) {
+                showToast('Item is already in your cart.', 'warning');
+                return;
             }
+
+            const cartItem = { 
+                _id: item._id, 
+                name: item.name, 
+                price: item.price, 
+                breed: item.breed, 
+                type: item.type, 
+                selected: true 
+            };
+            cart.push(cartItem);
+            updateCartBadge();
+            saveUserState();
+            showToast(`${item.name} added to cart`, 'success');
+            const active = document.querySelector('.nav-item.bg-green-600')?.getAttribute('onclick') || '';
+            if (active.includes('dashboard')) renderDashboard();
         }
         function removeFromCart(index) {
             cart.splice(index, 1);
@@ -1268,20 +1228,23 @@
         }
         function toggleWishlist(id) {
             const index = wishlist.indexOf(id);
+            const item = livestock.find(i => i._id === id);
+            if (!item) return;
+
             if (index === -1) {
-                // FIX: Check for duplicates before pushing
-                if (!wishlist.includes(id)) {
-                    wishlist.push(id);
-                    showToast('Added to wishlist', 'success');
-                } else {
-                    showToast('Already in wishlist', 'info');
-                }
+                // Add only if not already present
+                wishlist.push(id);
+                showToast('Added to wishlist', 'success');
             } else {
+                // Remove if present
                 wishlist.splice(index, 1);
                 showToast('Removed from wishlist', 'info');
             }
+
+            // Always save and update UI
             saveUserState();
-            updateWishlistBadge(); 
+            updateWishlistBadge();
+
             const active = document.querySelector('.nav-item.bg-green-600')?.getAttribute('onclick') || '';
             if (active.includes('wishlist')) renderWishlist();
             if (active.includes('browse')) renderBrowse();
@@ -1440,7 +1403,6 @@ async function createOrder(itemsToBuy) {
                 else b.classList.add('hidden');
             });
         }
-        
         function updateWishlistBadge() {
             const badge = document.getElementById('wishlist-badge');
             if (!badge) return;
@@ -1449,7 +1411,6 @@ async function createOrder(itemsToBuy) {
             if (getVisibleWishlistCount() > 0) badge.classList.remove('hidden');
             else badge.classList.add('hidden');
         }
-
         function getStatusColor(status) {
             if (status === 'Shipped') return 'bg-blue-100 text-blue-700';
             if (status === 'Delivered') return 'bg-gray-800 text-white';
@@ -1476,7 +1437,6 @@ async function createOrder(itemsToBuy) {
             const registerForm = document.getElementById('register-form');
             if (loginForm) loginForm.addEventListener('submit', handleLogin);
             if (registerForm) registerForm.addEventListener('submit', handleRegister);
-            
             document.addEventListener('click', (e) => {
                 // Close Profile Menu
                 const menu = document.getElementById('profile-menu');
@@ -1486,7 +1446,6 @@ async function createOrder(itemsToBuy) {
                         toggleProfileMenu(false);
                     }
                 }
-
                 // NEW: Close Notification Menu
                 const notifMenu = document.getElementById('notification-menu');
                 const notifBtn = document.getElementById('notification-button');
@@ -1555,7 +1514,7 @@ async function confirmPayment(paymentId, items, total) {
             credentials: "include",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                items: items.map(i => ({ _id: i._id, name: i.name, price: i.price, breed: i.breed })),
+                items: items.map(i => ({ _id: i._id, name: i.name, price: i.price, breed: i.breed, type: i.type })),
                 total,
                 date: new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
                 address: currentAddress,
@@ -1620,7 +1579,6 @@ async function cancelOrder(id) {
       });
     } catch(e){ console.error("animatePage error", e); }
   };
-
   // Reveal observer for cards
   const revealObserver = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
@@ -1630,7 +1588,6 @@ async function cancelOrder(id) {
       }
     });
   }, { threshold: 0.18 });
-
   window.applyRevealAndPremium = function(){
     try {
       const grid = document.getElementById('livestock-grid');
@@ -1643,7 +1600,6 @@ async function cancelOrder(id) {
       });
     } catch(e){ console.error("applyReveal error", e); }
   };
-
   // Patch router to trigger page animation and apply reveal on browse
   if (window.router) {
     const __old_router = window.router.bind(window);
@@ -1689,7 +1645,6 @@ async function cancelOrder(id) {
       }
     }, 150);
   }
-
   // Patch showToast to add toast-anim class to new toasts
   if (window.showToast) {
     const _oldToast = window.showToast.bind(window);
@@ -1725,7 +1680,6 @@ async function cancelOrder(id) {
       }
     }, 120);
   }
-
   // On initial load, add premium button classes to existing buttons
   document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('button:not(.btn-press)').forEach(b => b.classList.add('btn-press'));
@@ -1733,7 +1687,6 @@ async function cancelOrder(id) {
     // apply reveal if browse view is present
     setTimeout(() => { applyRevealAndPremium(); }, 300);
   });
-
 })();
 </script>
 </body>
