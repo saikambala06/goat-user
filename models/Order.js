@@ -9,7 +9,7 @@ const orderSchema = new mongoose.Schema({
         name: String,
         price: Number,
         breed: String,
-        type: String // FIX: Added type field
+        type: String // Added field to store Goat/Sheep type
     }],
     total: { type: Number, required: true },
     status: { type: String, default: 'Processing' }, 
