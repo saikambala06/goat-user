@@ -2,13 +2,12 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 // ======================================================================
-// DENORMALIZED SCHEMA STRUCTURE (Matches Client-side State Persistence)
+// DENORMALIZED SCHEMA STRUCTURE
 // ======================================================================
 
-// 1. Cart Item Schema (Denormalized - stores full item snapshot, not just ObjectId)
+// 1. Cart Item Schema
 const cartItemSchema = new mongoose.Schema(
   {
-    // The client uses _id from Livestock model to fetch images
     _id: { type: String, required: true }, 
     name: { type: String, required: true },
     price: { type: Number, required: true },
@@ -16,15 +15,15 @@ const cartItemSchema = new mongoose.Schema(
     type: { type: String }, 
     selected: { type: Boolean, default: true },
   },
-  { _id: false } // Do not generate an ObjectId for the subdocument
+  { _id: false } 
 );
 
-// 2. Address Schema (Detailed and Denormalized)
+// 2. Address Schema
 const addressSchema = new mongoose.Schema(
   {
     label: { type: String, default: '' },
     name: { type: String, required: true },
-    line1: { type: String, required: true }, // Using line1 to encompass both 'line' and 'line1' fields
+    line1: { type: String, required: true }, 
     line2: { type: String, default: '' },
     city: { type: String, required: true },
     state: { type: String, required: true },
@@ -41,22 +40,18 @@ const userSchema = new mongoose.Schema({
   password: { type: String, required: true },
   
   // Storage for persistent user state:
-  cart: [cartItemSchema], // Stores item snapshots
-  wishlist: [
-    {
-      type: String, // Stores Livestock IDs as strings (matching client's persistence logic)
-    },
-  ],
+  cart: [cartItemSchema], 
+  // FIXED: Wishlist is now a simple array of Strings to prevent saving errors
+  wishlist: [String],
   addresses: [addressSchema],
   
   createdAt: { type: Date, default: Date.now },
 });
 
 // ======================================================================
-// BCRYPT HASHING LOGIC (From the first uploaded file)
+// BCRYPT HASHING LOGIC
 // ======================================================================
 
-// Hash password before save
 userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
   try {
@@ -68,9 +63,7 @@ userSchema.pre('save', async function (next) {
   }
 });
 
-// Compare password instance method
 userSchema.methods.comparePassword = function (candidatePassword) {
-  // Uses bcrypt.compare to check the candidate password against the stored hash
   return bcrypt.compare(candidatePassword, this.password);
 };
 
