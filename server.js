@@ -7,22 +7,23 @@ const jwt = require('jsonwebtoken');
 const multer = require('multer');
 require('dotenv').config();
 
-// --- CRITICAL: ENSURE THESE FILES EXIST IN A 'models' FOLDER ---
+// Models
 const Livestock = require('./models/Livestock');
 const Order = require('./models/Order');
 const User = require('./models/User');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || 'change-this-secret';
+const JWT_SECRET = process.env.JWT_SECRET || 'change-this-secret-key-123';
 
-// Multer config (Limit file size to 5MB)
+// Multer (File Uploads)
 const upload = multer({ 
     storage: multer.memoryStorage(),
     limits: { fileSize: 5 * 1024 * 1024 } 
 });
 
 // Middleware
+// Note: 'origin: true' allows the request origin. 'credentials: true' allows cookies.
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
@@ -31,10 +32,7 @@ app.use(express.static('public'));
 // Database Connection
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/livestockmart';
 
-mongoose.connect(MONGODB_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-})
+mongoose.connect(MONGODB_URI)
 .then(() => console.log('✅ Connected to MongoDB'))
 .catch((err) => console.error('❌ MongoDB Connection Error:', err));
 
@@ -46,8 +44,9 @@ function createToken(user) {
 function setAuthCookie(res, token) {
     res.cookie('token', token, {
         httpOnly: true,
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
+        // 'lax' is best for same-domain (Vercel rewrites), 'none' requires secure: true for cross-domain
+        sameSite: 'lax', 
+        secure: process.env.NODE_ENV === 'production', 
         maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 }
@@ -93,11 +92,6 @@ app.post('/api/auth/login', async (req, res) => {
         const user = await User.findOne({ email });
         if (!user) return res.status(400).json({ message: 'Invalid credentials' });
 
-        if (typeof user.comparePassword !== 'function') {
-            console.error("CRITICAL: User model missing comparePassword method.");
-            return res.status(500).json({ message: 'Server configuration error' });
-        }
-
         const isMatch = await user.comparePassword(password);
         if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
 
@@ -119,7 +113,72 @@ app.post('/api/auth/logout', (req, res) => {
     res.json({ message: 'Logged out' });
 });
 
-// --- ADMIN API ROUTES ---
+// --- USER STATE ROUTES (CART, WISHLIST, NOTIFICATIONS) ---
+
+// Get User State
+app.get('/api/user/state', authMiddleware, async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id);
+        if (!user) return res.status(404).json({ message: 'User not found' });
+        
+        res.json({ 
+            cart: user.cart || [], 
+            wishlist: user.wishlist || [], 
+            addresses: user.addresses || [],
+            notifications: user.notifications || [] 
+        });
+    } catch (err) { 
+        console.error("Get State Error:", err);
+        res.status(500).json({ error: err.message }); 
+    }
+});
+
+// Update User State (Sync)
+app.put('/api/user/state', authMiddleware, async (req, res) => {
+    try {
+        const { cart, wishlist, addresses, notifications } = req.body;
+        
+        // Use findByIdAndUpdate to replace the arrays entirely
+        const updatedUser = await User.findByIdAndUpdate(
+            req.user.id, 
+            { $set: { cart, wishlist, addresses, notifications } },
+            { new: true, runValidators: true }
+        );
+
+        if (!updatedUser) return res.status(404).json({ message: 'User not found' });
+
+        res.json({ message: 'State synchronized', success: true });
+    } catch (err) { 
+        console.error("Sync State Error:", err); // Critical for debugging validation errors
+        res.status(400).json({ error: 'Failed to save state. Invalid data format.' }); 
+    }
+});
+
+// --- LIVESTOCK ROUTES ---
+
+app.get('/api/livestock', async (req, res) => {
+    try {
+        const livestock = await Livestock.find({ status: 'Available' }, '-image'); 
+        res.json(livestock);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/livestock/image/:id', async (req, res) => {
+    try {
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(404).send('Invalid ID');
+        const livestock = await Livestock.findById(req.params.id, 'image');
+        if (!livestock || !livestock.image || !livestock.image.data) return res.status(404).send('Image not found');
+        
+        res.set('Content-Type', livestock.image.contentType);
+        res.send(livestock.image.data);
+    } catch (err) {
+        res.status(500).send('Server Error');
+    }
+});
+
+// --- ADMIN ROUTES ---
 
 app.get('/api/admin/livestock', async (req, res) => {
     try {
@@ -130,19 +189,13 @@ app.get('/api/admin/livestock', async (req, res) => {
     }
 });
 
-// POST Livestock (Admin)
 app.post('/api/admin/livestock', upload.single('image'), async (req, res) => {
     try {
         const { name, type, breed, age, price, tags, status, weight } = req.body;
-
         if (!name || !type || !price) return res.status(400).json({ message: 'Missing required fields' });
 
         const image = req.file ? { data: req.file.buffer, contentType: req.file.mimetype } : undefined;
-        
-        let tagArray = [];
-        if (tags && typeof tags === 'string') {
-            tagArray = tags.split(',').map(t => t.trim()).filter(t => t.length > 0);
-        }
+        let tagArray = tags && typeof tags === 'string' ? tags.split(',').map(t => t.trim()).filter(t => t.length > 0) : [];
 
         const newItem = new Livestock({
             name, type, breed, age, 
@@ -155,40 +208,23 @@ app.post('/api/admin/livestock', upload.single('image'), async (req, res) => {
         await newItem.save();
         res.status(201).json(newItem);
     } catch (err) {
-        console.error('Add Livestock Error:', err);
         res.status(500).json({ error: err.message });
     }
 });
 
-// PUT Livestock (Admin)
 app.put('/api/admin/livestock/:id', upload.single('image'), async (req, res) => {
     try {
         if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
-
-        const { name, type, breed, age, price, tags, status, weight } = req.body;
         
-        const updates = { 
-            name, type, breed, age, 
-            weight,
-            price: parseFloat(price) || 0, 
-            status 
-        };
-
-        if (tags) {
-            updates.tags = typeof tags === 'string' ? tags.split(',').map(t => t.trim()) : tags;
-        }
-
-        if (req.file) {
-            updates.image = { data: req.file.buffer, contentType: req.file.mimetype };
-        }
+        const updates = { ...req.body };
+        if (updates.price) updates.price = parseFloat(updates.price);
+        if (req.file) updates.image = { data: req.file.buffer, contentType: req.file.mimetype };
+        if (updates.tags && typeof updates.tags === 'string') updates.tags = updates.tags.split(',').map(t => t.trim());
 
         const livestock = await Livestock.findByIdAndUpdate(req.params.id, updates, { new: true });
-        if (!livestock) return res.status(404).json({ message: "Item not found" });
-
         res.json(livestock);
     } catch (err) {
-        console.error('Update Livestock Error:', err);
-        res.status(500).json({ message: 'Server error updating' });
+        res.status(500).json({ message: 'Update failed' });
     }
 });
 
@@ -213,7 +249,6 @@ app.get('/api/admin/orders', async (req, res) => {
 
 app.put('/api/admin/orders/:id', async (req, res) => {
     try {
-        if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
         const order = await Order.findByIdAndUpdate(req.params.id, { status: req.body.status }, { new: true });
         res.json(order);
     } catch (err) {
@@ -230,30 +265,7 @@ app.get('/api/admin/users', async (req, res) => {
     }
 });
 
-// --- PUBLIC/USER ROUTES ---
-
-app.get('/api/livestock', async (req, res) => {
-    try {
-        const livestock = await Livestock.find({ status: 'Available' }, '-image'); 
-        res.json(livestock);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-app.get('/api/livestock/image/:id', async (req, res) => {
-    try {
-        if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(404).send('Invalid ID');
-        const livestock = await Livestock.findById(req.params.id, 'image');
-        if (!livestock || !livestock.image || !livestock.image.data) return res.status(404).send('Image not found');
-        
-        res.set('Content-Type', livestock.image.contentType);
-        res.send(livestock.image.data);
-    } catch (err) {
-        console.error('Image Error:', err);
-        res.status(500).send('Server Error');
-    }
-});
+// --- ORDER ROUTES ---
 
 app.get('/api/orders', authMiddleware, async (req, res) => {
     try {
@@ -264,99 +276,44 @@ app.get('/api/orders', authMiddleware, async (req, res) => {
     }
 });
 
-// ✅ UPDATED: Cancel Order Route (With Validation)
-app.put('/api/orders/:id/cancel', authMiddleware, async (req, res) => {
-    try {
-        const orderId = req.params.id;
-        const userId = req.user.id; 
-
-        if (!mongoose.Types.ObjectId.isValid(orderId)) {
-            return res.status(400).json({ message: 'Invalid Order ID' });
-        }
-
-        const order = await Order.findOne({ _id: orderId, userId: userId });
-        if (!order) return res.status(404).json({ message: 'Order not found' });
-
-        // Only allow cancellation if order is still Processing
-        if (order.status !== 'Processing') {
-            return res.status(400).json({ message: `Cannot cancel order with status: ${order.status}` });
-        }
-
-        order.status = 'Cancelled';
-        await order.save();
-        res.json({ success: true, message: 'Order cancelled', order });
-    } catch (err) {
-        console.error('Cancel Order Error:', err);
-        res.status(500).json({ message: 'Server error during cancellation' });
-    }
-});
-
 app.post('/api/orders', authMiddleware, async (req, res) => {
     try {
         const newOrder = new Order({ ...req.body, userId: req.user.id, customer: req.user.name });
         await newOrder.save();
+        // Clear cart after order
         await User.findByIdAndUpdate(req.user.id, { $set: { cart: [] } });
         res.status(201).json(newOrder);
     } catch (err) {
-        console.error('Order Error:', err);
+        console.error("Order Create Error:", err);
         res.status(500).json({ error: 'Order creation failed' });
     }
 });
 
-// ✅ UPDATED: User State with Notifications
-app.get('/api/user/state', authMiddleware, async (req, res) => {
+app.put('/api/orders/:id/cancel', authMiddleware, async (req, res) => {
     try {
-        const user = await User.findById(req.user.id);
-        res.json({ 
-            cart: user.cart || [], 
-            wishlist: user.wishlist || [], 
-            addresses: user.addresses || [],
-            notifications: user.notifications || [] 
-        });
-    } catch (err) { 
-        res.status(500).json({ error: err.message }); 
-    }
-});
+        const order = await Order.findOne({ _id: req.params.id, userId: req.user.id });
+        if (!order) return res.status(404).json({ message: 'Order not found' });
+        if (order.status !== 'Processing') return res.status(400).json({ message: 'Cannot cancel order' });
 
-// ✅ UPDATED: Sync User State with Notifications
-app.put('/api/user/state', authMiddleware, async (req, res) => {
-    try {
-        const { cart, wishlist, addresses, notifications } = req.body;
-        await User.findByIdAndUpdate(req.user.id, { 
-            $set: { cart, wishlist, addresses, notifications } 
-        });
-        res.json({ message: 'State synchronized' });
-    } catch (err) { 
-        res.status(500).json({ error: err.message }); 
-    }
-});
-
-// Legacy Notifications Route (Retained for compatibility, returns empty to prevent errors)
-app.get('/api/notifications', authMiddleware, (req, res) => {
-    res.json([]); 
-});
-
-app.post('/api/payment/create', authMiddleware, (req, res) => {
-    try {
-        const { amount } = req.body;
-        const paymentId = 'PAY_' + Date.now();
-        const upiString = `upi://pay?pa=${process.env.UPI_ID || 'sai.kambala@ybl'}&pn=LivestockMart&am=${amount}`;
-        res.json({ upiString, paymentId });
+        order.status = 'Cancelled';
+        await order.save();
+        res.json({ success: true, message: 'Order cancelled' });
     } catch (err) {
-        res.status(500).json({ message: 'Payment Error' });
+        res.status(500).json({ message: 'Cancellation failed' });
     }
+});
+
+// --- PAYMENT ROUTES ---
+app.post('/api/payment/create', authMiddleware, (req, res) => {
+    const { amount } = req.body;
+    const paymentId = 'PAY_' + Date.now();
+    const upiString = `upi://pay?pa=${process.env.UPI_ID || 'sai.kambala@ybl'}&pn=LivestockMart&am=${amount}`;
+    res.json({ upiString, paymentId });
 });
 
 app.post('/api/payment/confirm', authMiddleware, (req, res) => res.json({ success: true }));
 
-app.use((err, req, res, next) => {
-    if (err instanceof multer.MulterError) {
-        return res.status(400).json({ message: `Upload error: ${err.message}` });
-    }
-    console.error('Global Error:', err);
-    res.status(500).json({ message: 'Internal Server Error' });
-});
-
+// --- FALLBACK HANDLERS ---
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
