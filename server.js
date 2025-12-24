@@ -16,7 +16,6 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'change-this-secret-key-123';
 
-// --- STABILITY FIX 1: Robust Database Connection ---
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/livestockmart';
 
 const connectDB = async () => {
@@ -37,13 +36,11 @@ mongoose.connection.on('error', (err) => console.error('❌ MongoDB connection e
 
 connectDB();
 
-// --- CONFIGURATION ---
 const upload = multer({ 
     storage: multer.memoryStorage(),
     limits: { fileSize: 5 * 1024 * 1024 } 
 });
 
-// Middleware
 app.use(cors({ 
     origin: true, 
     credentials: true,
@@ -53,13 +50,11 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(express.static('public'));
 
-// --- STABILITY FIX 2: Health Check Endpoint ---
 app.get('/health', (req, res) => {
     const dbStatus = mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected';
     res.status(200).json({ status: 'UP', uptime: process.uptime(), database: dbStatus });
 });
 
-// --- AUTH HELPERS ---
 function createToken(user) {
     return jwt.sign({ id: user._id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
 }
@@ -135,13 +130,12 @@ app.post('/api/auth/logout', (req, res) => {
     res.json({ message: 'Logged out' });
 });
 
-// --- USER STATE ROUTES (FIXED) ---
+// --- USER STATE ROUTES ---
 app.get('/api/user/state', authMiddleware, async (req, res) => {
     try {
         const user = await User.findById(req.user.id);
         if (!user) return res.status(404).json({ message: 'User not found' });
         
-        // Return default arrays if fields are missing to prevent frontend crashes
         res.json({ 
             cart: user.cart || [], 
             wishlist: user.wishlist || [], 
@@ -158,7 +152,6 @@ app.put('/api/user/state', authMiddleware, async (req, res) => {
     try {
         const { cart, wishlist, addresses, notifications } = req.body;
         
-        // FIX: Removed 'runValidators: true' to prevent 400 Bad Request on partial data
         const updatedUser = await User.findByIdAndUpdate(
             req.user.id, 
             { $set: { cart, wishlist, addresses, notifications } },
@@ -169,7 +162,6 @@ app.put('/api/user/state', authMiddleware, async (req, res) => {
         res.json({ message: 'State synchronized', success: true });
     } catch (err) { 
         console.error("Sync State Error:", err); 
-        // Return actual error message for debugging
         res.status(400).json({ error: 'Failed to save state', details: err.message }); 
     }
 });
@@ -177,7 +169,9 @@ app.put('/api/user/state', authMiddleware, async (req, res) => {
 // --- LIVESTOCK ROUTES ---
 app.get('/api/livestock', async (req, res) => {
     try {
-        const livestock = await Livestock.find({ status: 'Available' }, '-image'); 
+        // CHANGED: Fetch ALL items (removed status: 'Available' filter)
+        // This allows the frontend to see 'Sold' items and render them as Out of Stock
+        const livestock = await Livestock.find({}, '-image'); 
         res.json(livestock);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -220,7 +214,8 @@ app.post('/api/admin/livestock', upload.single('image'), async (req, res) => {
             weight: weight || "N/A", 
             price: parseFloat(price) || 0,
             tags: tagArray, 
-            status, image
+            status: status || 'Available', 
+            image
         });
 
         await newItem.save();
@@ -295,9 +290,22 @@ app.get('/api/orders', authMiddleware, async (req, res) => {
 
 app.post('/api/orders', authMiddleware, async (req, res) => {
     try {
+        // 1. Create the Order
         const newOrder = new Order({ ...req.body, userId: req.user.id, customer: req.user.name });
         await newOrder.save();
+
+        // 2. Mark purchased items as 'Sold' in Inventory
+        const itemIds = req.body.items.map(item => item._id);
+        if (itemIds.length > 0) {
+            await Livestock.updateMany(
+                { _id: { $in: itemIds } }, 
+                { $set: { status: 'Sold' } }
+            );
+        }
+
+        // 3. Clear User's Cart
         await User.findByIdAndUpdate(req.user.id, { $set: { cart: [] } });
+        
         res.status(201).json(newOrder);
     } catch (err) {
         console.error("Order Create Error:", err);
@@ -311,10 +319,22 @@ app.put('/api/orders/:id/cancel', authMiddleware, async (req, res) => {
         if (!order) return res.status(404).json({ message: 'Order not found' });
         if (order.status !== 'Processing') return res.status(400).json({ message: 'Cannot cancel order' });
 
+        // 1. Update Order Status
         order.status = 'Cancelled';
         await order.save();
-        res.json({ success: true, message: 'Order cancelled' });
+
+        // 2. Restock Items (Mark as 'Available')
+        const itemIds = order.items.map(item => item._id);
+        if (itemIds.length > 0) {
+            await Livestock.updateMany(
+                { _id: { $in: itemIds } }, 
+                { $set: { status: 'Available' } }
+            );
+        }
+
+        res.json({ success: true, message: 'Order cancelled & items restocked' });
     } catch (err) {
+        console.error('Cancel Error:', err);
         res.status(500).json({ message: 'Cancellation failed' });
     }
 });
@@ -333,7 +353,6 @@ app.post('/api/payment/confirm', authMiddleware, (req, res) => res.json({ succes
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-// --- ERROR HANDLING ---
 process.on('uncaughtException', (err) => {
     console.error('🔥 UNCAUGHT EXCEPTION! Shutting down...', err);
     process.exit(1);
