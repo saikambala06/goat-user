@@ -3,20 +3,23 @@ const mongoose = require('mongoose');
 const orderSchema = new mongoose.Schema({
     customer: { type: String, required: true },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    date: { type: String, required: true }, // Keeping string for simplicity matching frontend
+    date: { type: String, required: true },
     items: [{
-        _id: String, // Changed from id to _id to match frontend handling
+        _id: String,
         name: String,
         price: Number,
         breed: String,
-        weight: String // Added to ensure weight persists in order details
+        type: String,
+        weight: String
     }],
     total: { type: Number, required: true },
-    status: { type: String, default: 'Processing' }, // Processing, Shipped, Delivered
+    status: { type: String, default: 'Processing' },
+    // FIXED: Updated address schema to match User.js (line1 instead of line)
     address: {
         name: String,
         phone: String,
-        line: String,
+        line1: String, 
+        line2: String,
         city: String,
         state: String,
         pincode: String
