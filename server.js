@@ -16,25 +16,62 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'change-this-secret-key-123';
 
-// Multer (File Uploads)
+// --- STABILITY FIX 1: Robust Database Connection ---
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/livestockmart';
+
+const connectDB = async () => {
+    try {
+        await mongoose.connect(MONGODB_URI, {
+            serverSelectionTimeoutMS: 5000, // Fail fast if DB is down
+            socketTimeoutMS: 45000, // Close sockets after 45s of inactivity
+        });
+        console.log('✅ Connected to MongoDB');
+    } catch (err) {
+        console.error('❌ Initial MongoDB Connection Error:', err);
+        // Do not exit process here; allow retry logic or server to start without DB
+    }
+};
+
+// Monitor DB connection events
+mongoose.connection.on('disconnected', () => {
+    console.warn('⚠️ MongoDB disconnected! Attempting reconnect...');
+});
+mongoose.connection.on('reconnected', () => {
+    console.log('✅ MongoDB reconnected');
+});
+mongoose.connection.on('error', (err) => {
+    console.error('❌ MongoDB connection error:', err);
+});
+
+// Initialize DB Connection
+connectDB();
+
+// --- CONFIGURATION ---
 const upload = multer({ 
     storage: multer.memoryStorage(),
     limits: { fileSize: 5 * 1024 * 1024 } 
 });
 
 // Middleware
-// Note: 'origin: true' allows the request origin. 'credentials: true' allows cookies.
-app.use(cors({ origin: true, credentials: true }));
+app.use(cors({ 
+    origin: true, 
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+}));
 app.use(express.json());
 app.use(cookieParser());
 app.use(express.static('public'));
 
-// Database Connection
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/livestockmart';
-
-mongoose.connect(MONGODB_URI)
-.then(() => console.log('✅ Connected to MongoDB'))
-.catch((err) => console.error('❌ MongoDB Connection Error:', err));
+// --- STABILITY FIX 2: Health Check Endpoint ---
+// Use this to check if the server is alive without querying the DB
+app.get('/health', (req, res) => {
+    const dbStatus = mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected';
+    res.status(200).json({ 
+        status: 'UP', 
+        uptime: process.uptime(),
+        database: dbStatus 
+    });
+});
 
 // --- AUTH HELPERS ---
 function createToken(user) {
@@ -44,7 +81,6 @@ function createToken(user) {
 function setAuthCookie(res, token) {
     res.cookie('token', token, {
         httpOnly: true,
-        // 'lax' is best for same-domain (Vercel rewrites), 'none' requires secure: true for cross-domain
         sameSite: 'lax', 
         secure: process.env.NODE_ENV === 'production', 
         maxAge: 7 * 24 * 60 * 60 * 1000,
@@ -113,9 +149,7 @@ app.post('/api/auth/logout', (req, res) => {
     res.json({ message: 'Logged out' });
 });
 
-// --- USER STATE ROUTES (CART, WISHLIST, NOTIFICATIONS) ---
-
-// Get User State
+// --- USER STATE ROUTES ---
 app.get('/api/user/state', authMiddleware, async (req, res) => {
     try {
         const user = await User.findById(req.user.id);
@@ -133,29 +167,23 @@ app.get('/api/user/state', authMiddleware, async (req, res) => {
     }
 });
 
-// Update User State (Sync)
 app.put('/api/user/state', authMiddleware, async (req, res) => {
     try {
         const { cart, wishlist, addresses, notifications } = req.body;
-        
-        // Use findByIdAndUpdate to replace the arrays entirely
         const updatedUser = await User.findByIdAndUpdate(
             req.user.id, 
             { $set: { cart, wishlist, addresses, notifications } },
             { new: true, runValidators: true }
         );
-
         if (!updatedUser) return res.status(404).json({ message: 'User not found' });
-
         res.json({ message: 'State synchronized', success: true });
     } catch (err) { 
-        console.error("Sync State Error:", err); // Critical for debugging validation errors
+        console.error("Sync State Error:", err); 
         res.status(400).json({ error: 'Failed to save state. Invalid data format.' }); 
     }
 });
 
 // --- LIVESTOCK ROUTES ---
-
 app.get('/api/livestock', async (req, res) => {
     try {
         const livestock = await Livestock.find({ status: 'Available' }, '-image'); 
@@ -174,12 +202,12 @@ app.get('/api/livestock/image/:id', async (req, res) => {
         res.set('Content-Type', livestock.image.contentType);
         res.send(livestock.image.data);
     } catch (err) {
+        console.error("Image Fetch Error:", err); // Log error
         res.status(500).send('Server Error');
     }
 });
 
 // --- ADMIN ROUTES ---
-
 app.get('/api/admin/livestock', async (req, res) => {
     try {
         const livestock = await Livestock.find({}).sort({ createdAt: -1 });
@@ -266,7 +294,6 @@ app.get('/api/admin/users', async (req, res) => {
 });
 
 // --- ORDER ROUTES ---
-
 app.get('/api/orders', authMiddleware, async (req, res) => {
     try {
         const orders = await Order.find({ userId: req.user.id }).sort({ createdAt: -1 });
@@ -280,7 +307,6 @@ app.post('/api/orders', authMiddleware, async (req, res) => {
     try {
         const newOrder = new Order({ ...req.body, userId: req.user.id, customer: req.user.name });
         await newOrder.save();
-        // Clear cart after order
         await User.findByIdAndUpdate(req.user.id, { $set: { cart: [] } });
         res.status(201).json(newOrder);
     } catch (err) {
@@ -317,4 +343,21 @@ app.post('/api/payment/confirm', authMiddleware, (req, res) => res.json({ succes
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+// --- STABILITY FIX 3: Global Error Handling ---
+// Catch unhandled errors that would otherwise crash the server
+process.on('uncaughtException', (err) => {
+    console.error('🔥 UNCAUGHT EXCEPTION! Shutting down...', err);
+    process.exit(1); // Process manager should restart this
+});
+
+process.on('unhandledRejection', (err) => {
+    console.error('🔥 UNHANDLED REJECTION! Shutting down...', err);
+    process.exit(1);
+});
+
+// --- STABILITY FIX 4: Server Timeout Settings ---
+const server = app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+
+// Keep connections open longer to prevent load balancers from killing them
+server.keepAliveTimeout = 120 * 1000;
+server.headersTimeout = 120 * 1000;
