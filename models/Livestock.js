@@ -5,6 +5,8 @@ const livestockSchema = new mongoose.Schema({
     type: { type: String, required: true }, // Goat or Sheep
     breed: { type: String, required: true },
     age: { type: String, required: true },
+    
+    // ADDED WEIGHT FIELD HERE
     weight: { type: String, required: true }, 
 
     price: { type: Number, required: true },
