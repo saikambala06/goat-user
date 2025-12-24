@@ -22,28 +22,19 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/livest
 const connectDB = async () => {
     try {
         await mongoose.connect(MONGODB_URI, {
-            serverSelectionTimeoutMS: 5000, // Fail fast if DB is down
-            socketTimeoutMS: 45000, // Close sockets after 45s of inactivity
+            serverSelectionTimeoutMS: 5000, 
+            socketTimeoutMS: 45000, 
         });
         console.log('✅ Connected to MongoDB');
     } catch (err) {
         console.error('❌ Initial MongoDB Connection Error:', err);
-        // Do not exit process here; allow retry logic or server to start without DB
     }
 };
 
-// Monitor DB connection events
-mongoose.connection.on('disconnected', () => {
-    console.warn('⚠️ MongoDB disconnected! Attempting reconnect...');
-});
-mongoose.connection.on('reconnected', () => {
-    console.log('✅ MongoDB reconnected');
-});
-mongoose.connection.on('error', (err) => {
-    console.error('❌ MongoDB connection error:', err);
-});
+mongoose.connection.on('disconnected', () => console.warn('⚠️ MongoDB disconnected! Attempting reconnect...'));
+mongoose.connection.on('reconnected', () => console.log('✅ MongoDB reconnected'));
+mongoose.connection.on('error', (err) => console.error('❌ MongoDB connection error:', err));
 
-// Initialize DB Connection
 connectDB();
 
 // --- CONFIGURATION ---
@@ -63,14 +54,9 @@ app.use(cookieParser());
 app.use(express.static('public'));
 
 // --- STABILITY FIX 2: Health Check Endpoint ---
-// Use this to check if the server is alive without querying the DB
 app.get('/health', (req, res) => {
     const dbStatus = mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected';
-    res.status(200).json({ 
-        status: 'UP', 
-        uptime: process.uptime(),
-        database: dbStatus 
-    });
+    res.status(200).json({ status: 'UP', uptime: process.uptime(), database: dbStatus });
 });
 
 // --- AUTH HELPERS ---
@@ -149,12 +135,13 @@ app.post('/api/auth/logout', (req, res) => {
     res.json({ message: 'Logged out' });
 });
 
-// --- USER STATE ROUTES ---
+// --- USER STATE ROUTES (FIXED) ---
 app.get('/api/user/state', authMiddleware, async (req, res) => {
     try {
         const user = await User.findById(req.user.id);
         if (!user) return res.status(404).json({ message: 'User not found' });
         
+        // Return default arrays if fields are missing to prevent frontend crashes
         res.json({ 
             cart: user.cart || [], 
             wishlist: user.wishlist || [], 
@@ -170,16 +157,20 @@ app.get('/api/user/state', authMiddleware, async (req, res) => {
 app.put('/api/user/state', authMiddleware, async (req, res) => {
     try {
         const { cart, wishlist, addresses, notifications } = req.body;
+        
+        // FIX: Removed 'runValidators: true' to prevent 400 Bad Request on partial data
         const updatedUser = await User.findByIdAndUpdate(
             req.user.id, 
             { $set: { cart, wishlist, addresses, notifications } },
-            { new: true, runValidators: true }
+            { new: true } 
         );
+        
         if (!updatedUser) return res.status(404).json({ message: 'User not found' });
         res.json({ message: 'State synchronized', success: true });
     } catch (err) { 
         console.error("Sync State Error:", err); 
-        res.status(400).json({ error: 'Failed to save state. Invalid data format.' }); 
+        // Return actual error message for debugging
+        res.status(400).json({ error: 'Failed to save state', details: err.message }); 
     }
 });
 
@@ -202,7 +193,6 @@ app.get('/api/livestock/image/:id', async (req, res) => {
         res.set('Content-Type', livestock.image.contentType);
         res.send(livestock.image.data);
     } catch (err) {
-        console.error("Image Fetch Error:", err); // Log error
         res.status(500).send('Server Error');
     }
 });
@@ -343,11 +333,10 @@ app.post('/api/payment/confirm', authMiddleware, (req, res) => res.json({ succes
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-// --- STABILITY FIX 3: Global Error Handling ---
-// Catch unhandled errors that would otherwise crash the server
+// --- ERROR HANDLING ---
 process.on('uncaughtException', (err) => {
     console.error('🔥 UNCAUGHT EXCEPTION! Shutting down...', err);
-    process.exit(1); // Process manager should restart this
+    process.exit(1);
 });
 
 process.on('unhandledRejection', (err) => {
@@ -355,9 +344,7 @@ process.on('unhandledRejection', (err) => {
     process.exit(1);
 });
 
-// --- STABILITY FIX 4: Server Timeout Settings ---
 const server = app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
 
-// Keep connections open longer to prevent load balancers from killing them
 server.keepAliveTimeout = 120 * 1000;
 server.headersTimeout = 120 * 1000;
