@@ -542,7 +542,6 @@
         let editingAddressIndex = -1;
         let autoRefreshInterval = null; 
         
-        // --- Dark Mode Logic ---
         function initTheme() {
             if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
                 document.documentElement.classList.add('dark');
@@ -557,13 +556,10 @@
             localStorage.theme = isDark ? 'dark' : 'light';
             updateToggleUI();
             
-            // Re-render current view to ensure JS-injected HTML gets correct classes if needed
-            // (Most classes are now dark: prefixed in the template literals, but this is a safety net)
             const activeNav = document.querySelector('.nav-item.bg-green-600');
             if (activeNav) {
                 const onclick = activeNav.getAttribute('onclick') || "";
                 const currentView = onclick.replace("router('", "").replace("')", "") || 'dashboard';
-                // Trigger re-render
                 if(currentView === 'browse') renderBrowse();
                 else if(currentView === 'cart') renderCart();
                 else if(currentView === 'orders') renderOrders();
@@ -585,9 +581,7 @@
                 btn.firstElementChild.className = "translate-x-1 inline-block h-4 w-4 transform rounded-full bg-white transition-transform";
             }
         }
-        // -----------------------
 
-        // --- Sidebar Logic ---
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
             const overlay = document.getElementById('mobile-overlay');
@@ -682,7 +676,6 @@
                 list.innerHTML = `<p class="text-center text-xs text-gray-400 py-4" id="no-notifications-msg">No new notifications.</p>`;
             } else {
                 list.innerHTML = [...notifications].reverse().map(n => {
-                    // Update seen style for dark mode
                     const seenStyle = n.seen ? 'opacity-60' : 'bg-green-50/50 dark:bg-green-900/20';
                     return `
                     <div class="flex items-start justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition duration-150 ${seenStyle}">
@@ -1241,11 +1234,33 @@
             grid.innerHTML = filtered.map(item => {
                 const inWishlist = wishlist.includes(item._id); 
                 const imageUrl = `${API_URL}/livestock/image/${item._id}`;
+                const isSold = item.status === 'Sold';
+                
+                // --- NEW: Sold UI Logic ---
+                // If sold:
+                // 1. Show "Out of Stock" overlay
+                // 2. Disable "Buy Now" and "Add to Cart" buttons
+                
+                const buttons = isSold 
+                    ? `<button disabled class="w-full bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed px-3 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2">
+                        <i data-lucide="slash" class="w-4 h-4"></i> Sold Out
+                       </button>`
+                    : `<div class="flex gap-2 w-full">
+                            <button onclick="buyNow('${item._id}')" class="flex-1 bg-green-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-green-700 transition">Buy Now</button>
+                            <button onclick="addToCart('${item._id}')" class="flex-1 bg-gray-900 dark:bg-gray-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-gray-800 dark:hover:bg-gray-500 transition">Add to Cart</button>
+                       </div>`;
+
+                const soldOverlay = isSold ? 
+                    `<div class="absolute inset-0 bg-black/50 z-10 flex items-center justify-center rounded-lg">
+                        <span class="bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full transform -rotate-12 border-2 border-white shadow-lg">OUT OF STOCK</span>
+                     </div>` : '';
+
                 return `
-                <div class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow">
+                <div class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow relative overflow-hidden">
                     <div class="h-40 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center text-6xl mb-4 relative overflow-hidden">
-                        <img src="${imageUrl}" alt="${item.name}" class="w-full h-full object-cover rounded-lg" onerror="this.onerror=null; this.src='https://via.placeholder.com/160?text=No+Image';">
-                        <button onclick="toggleWishlist('${item._id}')" class="absolute top-2 right-2 p-2 bg-white dark:bg-gray-800 rounded-full shadow-sm hover:text-red-500 ${inWishlist ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'}">
+                        ${soldOverlay}
+                        <img src="${imageUrl}" alt="${item.name}" class="w-full h-full object-cover rounded-lg ${isSold ? 'grayscale opacity-75' : ''}" onerror="this.onerror=null; this.src='https://via.placeholder.com/160?text=No+Image';">
+                        <button onclick="toggleWishlist('${item._id}')" class="absolute top-2 right-2 p-2 bg-white dark:bg-gray-800 rounded-full shadow-sm hover:text-red-500 ${inWishlist ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'} z-20">
                             <i data-lucide="heart" class="w-4 h-4 ${inWishlist ? 'fill-current' : ''}"></i>
                         </button>
                     </div>
@@ -1262,10 +1277,9 @@
                     </div>
                     <div class="flex items-center justify-between mt-4">
                         <span class="text-xl font-bold text-green-700 dark:text-green-400">${formatINR(item.price)}</span>
-                        <div class="flex gap-2">
-                            <button onclick="buyNow('${item._id}')" class="bg-green-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-green-700 transition">Buy Now</button>
-                            <button onclick="addToCart('${item._id}')" class="bg-gray-900 dark:bg-gray-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-gray-800 dark:hover:bg-gray-500 transition">Add to Cart</button>
-                        </div>
+                    </div>
+                    <div class="mt-3">
+                        ${buttons}
                     </div>
                 </div>
             `}).join('');
@@ -1396,13 +1410,28 @@
             }
             grid.innerHTML = items.map(item => {
                 const imageUrl = `${API_URL}/livestock/image/${item._id}`;
+                const isSold = item.status === 'Sold';
+                const buttons = isSold 
+                    ? `<button disabled class="w-full bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed px-3 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2">
+                        <i data-lucide="slash" class="w-4 h-4"></i> Sold Out
+                       </button>`
+                    : `<div class="flex gap-2 w-full">
+                            <button onclick="buyNow('${item._id}')" class="flex-1 bg-green-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-green-700 transition">Buy Now</button>
+                            <button onclick="addToCart('${item._id}')" class="flex-1 bg-gray-900 dark:bg-gray-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-gray-800 dark:hover:bg-gray-500 transition">Add to Cart</button>
+                       </div>`;
+                 const soldOverlay = isSold ? 
+                    `<div class="absolute inset-0 bg-black/50 z-10 flex items-center justify-center rounded-lg">
+                        <span class="bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full transform -rotate-12 border-2 border-white shadow-lg">OUT OF STOCK</span>
+                     </div>` : '';
+
                 return `
                 <div class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm relative transition-colors">
-                    <button onclick="toggleWishlist('${item._id}')" class="absolute top-4 right-4 text-red-500 bg-white dark:bg-gray-800 rounded-full p-1 shadow hover:bg-red-50 dark:hover:bg-red-900/20 transition z-10">
+                    <button onclick="toggleWishlist('${item._id}')" class="absolute top-4 right-4 text-red-500 bg-white dark:bg-gray-800 rounded-full p-1 shadow hover:bg-red-50 dark:hover:bg-red-900/20 transition z-20">
                         <i data-lucide="x" class="w-4 h-4"></i>
                     </button>
                     <div class="h-40 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center text-6xl mb-4 overflow-hidden relative">
-                        <img src="${imageUrl}" alt="${item.name}" class="w-full h-full object-cover rounded-lg" onerror="this.onerror=null; this.src='https://via.placeholder.com/160?text=No+Image';">
+                         ${soldOverlay}
+                        <img src="${imageUrl}" alt="${item.name}" class="w-full h-full object-cover rounded-lg ${isSold ? 'grayscale opacity-75' : ''}" onerror="this.onerror=null; this.src='https://via.placeholder.com/160?text=No+Image';">
                     </div>
                     <div class="flex justify-between items-start mb-2">
                          <div class="truncate pr-2">
@@ -1415,10 +1444,9 @@
                     </div>
                     <div class="flex items-center justify-between mt-4">
                         <span class="text-xl font-bold text-green-700 dark:text-green-400">${formatINR(item.price)}</span>
-                        <div class="flex gap-2">
-                            <button onclick="buyNow('${item._id}')" class="bg-green-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-green-700 transition">Buy Now</button>
-                            <button onclick="addToCart('${item._id}')" class="bg-gray-900 dark:bg-gray-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-gray-800 dark:hover:bg-gray-500 transition">Add to Cart</button>
-                        </div>
+                    </div>
+                    <div class="mt-3">
+                        ${buttons}
                     </div>
                 </div>
             `}).join('');
@@ -1461,6 +1489,12 @@
             lucide.createIcons();
         }
         function addToCart(id) {
+            // --- NEW: Duplicate Check ---
+            if (cart.some(item => item._id === id)) {
+                showToast('This item is already in your cart', 'warning');
+                return;
+            }
+
             const item = livestock.find(i => i._id === id);
             if (item) {
                 const cartItem = { 
