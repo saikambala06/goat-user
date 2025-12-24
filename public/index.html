@@ -670,24 +670,29 @@
             return wishlist.filter(id => livestock.some(item => item._id === id)).length;
         }
         
-        // --- NOTIFICATION UI HELPERS (MongoDB Persistence) ---
+        // --- NOTIFICATION UI HELPERS (MongoDB Persistence + Unseen Logic) ---
         async function saveNotifications() {
             await saveUserState();
+        }
+
+        async function markNotificationsAsSeen() {
+            notifications.forEach(n => n.seen = true);
+            await saveNotifications();
+            updateNotificationBadge();
         }
 
         function updateNotificationBadge() {
             const badge = document.getElementById('notification-badge');
             const clearBtn = document.getElementById('clear-all-btn');
             if (!badge) return;
-            const count = notifications.length;
-            badge.innerText = count;
-            if (count > 0) {
+            const unseenCount = notifications.filter(n => !n.seen).length;
+            badge.innerText = unseenCount;
+            if (unseenCount > 0) {
                 badge.classList.remove('hidden');
-                if (clearBtn) clearBtn.disabled = false;
             } else {
                 badge.classList.add('hidden');
-                if (clearBtn) clearBtn.disabled = true;
             }
+            if (clearBtn) clearBtn.disabled = notifications.length === 0;
         }
 
         function renderNotifications() {
@@ -698,8 +703,10 @@
                 list.innerHTML = `<p class="text-center text-xs text-gray-400 py-4" id="no-notifications-msg">No new notifications.</p>`;
             } else {
                 // Display newest notifications first
-                list.innerHTML = [...notifications].reverse().map(n => `
-                    <div class="flex items-start justify-between p-3 rounded-lg hover:bg-gray-50 transition duration-150">
+                list.innerHTML = [...notifications].reverse().map(n => {
+                    const seenStyle = n.seen ? 'opacity-60' : 'bg-green-50/50';
+                    return `
+                    <div class="flex items-start justify-between p-3 rounded-lg hover:bg-gray-50 transition duration-150 ${seenStyle}">
                         <div class="flex items-start gap-2 flex-1">
                             <i data-lucide="${n.icon}" class="w-4 h-4 mt-0.5 text-${n.color}-500 flex-shrink-0"></i>
                             <div>
@@ -711,7 +718,7 @@
                             <i data-lucide="x" class="w-3 h-3"></i>
                         </button>
                     </div>
-                `).join('');
+                `}).join('');
             }
             updateNotificationBadge();
             lucide.createIcons();
@@ -720,14 +727,15 @@
         function toggleNotificationMenu(force) {
             const menu = document.getElementById('notification-menu');
             if (!menu) return;
-
             const isHidden = menu.classList.contains('hidden');
 
             if (typeof force === 'boolean') {
                 if (force) {
+                    renderNotifications();
                     menu.classList.remove('hidden', 'scale-95', 'opacity-0');
                     menu.classList.add('scale-100', 'opacity-100');
                 } else {
+                    markNotificationsAsSeen();
                     menu.classList.remove('scale-100', 'opacity-100');
                     menu.classList.add('scale-95', 'opacity-0');
                     setTimeout(() => menu.classList.add('hidden'), 300); 
@@ -740,6 +748,7 @@
                 menu.classList.remove('hidden', 'scale-95', 'opacity-0');
                 menu.classList.add('scale-100', 'opacity-100');
             } else {
+                markNotificationsAsSeen();
                 menu.classList.remove('scale-100', 'opacity-100');
                 menu.classList.add('scale-95', 'opacity-0');
                 setTimeout(() => menu.classList.add('hidden'), 300); 
@@ -1009,7 +1018,6 @@
         }
         // --- DATA LOADING ---
         async function loadData() {
-            // 1. ALWAYS REFRESH USER STATE (Cart, Wishlist, Addresses) on every tick
             if (currentUser) {
                 await loadUserState();
             }
@@ -1017,17 +1025,13 @@
             let fetchedOrders = orders;
             let fetchedLivestock = livestock;
             
-            // Check baseline for changes
             const isBaselineInitialized = previousLivestockCount > 0 || JSON.parse(previousOrdersSnapshot).length > 0;
             
             try {
-                // 2. Fetch Livestock
                 const lsRes = await fetch(`${API_URL}/livestock?_=${Date.now()}`);
                 fetchedLivestock = await lsRes.json();
-                
                 fetchedLivestock.sort((a, b) => (a._id < b._id) ? 1 : -1);
                 
-                // 3. Fetch Notifications API
                 try {
                      const notifRes = await fetch(`${API_URL}/notifications?_=${Date.now()}`);
                      if (notifRes.ok) {
@@ -1040,7 +1044,6 @@
                      }
                 } catch(e) { /* Ignore */ }
 
-                // Notification Logic: New Livestock Added
                 if (isBaselineInitialized && fetchedLivestock.length > previousLivestockCount) {
                     const newCount = fetchedLivestock.length - previousLivestockCount;
                     notifications.push({
@@ -1049,11 +1052,11 @@
                         message: `${newCount} new livestock item${newCount > 1 ? 's' : ''} added to the market!`,
                         icon: 'sheep',
                         color: 'green',
-                        timestamp: Date.now()
+                        timestamp: Date.now(),
+                        seen: false
                     });
                 }
                 
-                // 4. Fetch User-specific Orders
                 if (currentUser) {
                     const ordRes = await fetch(`${API_URL}/orders?_=${Date.now()}`, {
                         method: 'GET',
@@ -1062,7 +1065,6 @@
                     fetchedOrders = await ordRes.json();
                     fetchedOrders.sort((a,b) => (a._id < b._id) ? 1 : -1); 
 
-                    // Notification Logic: Order Status Change
                     const previousOrderMap = JSON.parse(previousOrdersSnapshot).reduce((acc, o) => {
                         acc[o._id] = o.status;
                         return acc;
@@ -1078,7 +1080,8 @@
                                     message: `Order #${String(newOrder._id).slice(-6)} status changed to ${newOrder.status}.`,
                                     icon: 'package',
                                     color: newOrder.status === 'Delivered' ? 'gray' : 'blue',
-                                    timestamp: Date.now()
+                                    timestamp: Date.now(),
+                                    seen: false
                                 });
                             }
                         });
@@ -1088,16 +1091,13 @@
                 console.error("API Error during loadData", e);
             }
             
-            // --- CHANGE DETECTION LOGIC ---
             const livestockChanged = JSON.stringify(livestock) !== JSON.stringify(fetchedLivestock);
             const ordersChanged = JSON.stringify(orders) !== JSON.stringify(fetchedOrders);
-            const notificationsChanged = notifications.length > 0 && isBaselineInitialized; // simplified check
+            const notificationsChanged = notifications.length > 0 && isBaselineInitialized;
 
-            // Updates
             if(livestockChanged) livestock = fetchedLivestock;
             if(ordersChanged) orders = fetchedOrders;
             
-            // Update baselines
             previousLivestockCount = livestock.length;
             localStorage.setItem('lm_prev_ls_count', livestock.length);
 
@@ -1106,7 +1106,6 @@
             
             if (notificationsChanged) await saveNotifications();
 
-            // Refresh Wishlist Filter
             const validLivestockIds = livestock.map(item => item._id);
             const cleanedWishlist = wishlist.filter(id => validLivestockIds.includes(id));
             if (cleanedWishlist.length !== wishlist.length) {
@@ -1114,8 +1113,6 @@
                 await saveUserState();
             }
             
-            // --- SELECTIVE RE-RENDERING ---
-            // Only re-render if data actually changed to prevent blinking
             const activeNav = document.querySelector('.nav-item.bg-green-600');
             let currentView = 'dashboard';
             if (activeNav) {
@@ -1127,16 +1124,12 @@
             
             if (currentView === 'browse' && livestockChanged) renderBrowse(); 
             if (currentView === 'orders' && ordersChanged) renderOrders();
-            // Dashboard depends on multiple sources, re-render if any changed
             if (currentView === 'dashboard' && (livestockChanged || ordersChanged)) renderDashboard(); 
-            // Cart/Wishlist/Addresses are updated by loadUserState which usually doesn't cause blinking unless layout shifts, 
-            // but we can re-render them safely if they are active.
             if (currentView === 'cart') renderCart(); 
             if (currentView === 'wishlist') renderWishlist();
             if (currentView === 'addresses') renderAddresses();
             if (currentView === 'summary') renderSummary();
 
-            // Badges always update
             updateCartBadge();
             updateWishlistBadge(); 
             updateNotificationBadge(); 
@@ -1357,26 +1350,27 @@
             const container = document.getElementById('orders-list-full');
             if (!container) return;
             if (orders.length === 0) {
-                container.innerHTML = '<div class="text-center text-gray-500">No past orders.</div>';
+                container.innerHTML = `<div class="text-center text-gray-500">No past orders.</div>`;
                 return;
             }
             container.innerHTML = orders.map(o => {
-                // FIXED: Map through ALL items to create a row for each item
-                // This ensures if you buy 2 items, you see 2 images and 2 sets of details.
-                const itemsHtml = (o.items || []).map(i => {
-                    const fullItem = livestock.find(l => l._id === i._id);
+                // Map through ALL items to create a row for each item
+                const itemsHtml = o.items.map(i => {
+                    const fullItem = livestock.find(l => l._id === i._id || l.id === i._id);
                     const weight = i.weight || (fullItem ? fullItem.weight : 'N/A');
+                    const type = i.type || (fullItem ? fullItem.type : 'N/A'); 
                     const imageUrl = `${API_URL}/livestock/image/${i._id}`;
-
                     return `
                         <div class="flex gap-4 mb-4 border-b border-gray-100 last:border-0 pb-4 last:pb-0">
                             <div class="w-20 h-20 bg-gray-100 rounded-lg flex-shrink-0 overflow-hidden border border-gray-200">
-                                <img src="${imageUrl}" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='https://via.placeholder.com/80?text=Img';">
+                                <img src="${imageUrl}" class="w-full h-full object-cover"
+                                    onerror="this.onerror=null; this.src='https://via.placeholder.com/80?text=Img'">
                             </div>
                             <div class="flex-1">
                                 <p class="font-bold text-gray-800">${i.name}</p>
+                                <p class="text-sm text-gray-600">Type: ${type}</p>
                                 <p class="text-sm text-gray-600">Breed: ${i.breed || 'N/A'}</p>
-                                <p class="text-sm text-gray-600">Weight: ${weight !== 'N/A' && weight ? weight + ' kg' : 'N/A'}</p>
+                                <p class="text-sm text-gray-600">Weight: ${weight !== 'N/A' ? weight + ' kg' : 'N/A'}</p>
                                 <p class="text-sm font-semibold text-green-700 mt-1">${formatINR(i.price)}</p>
                             </div>
                         </div>
@@ -1384,11 +1378,18 @@
                 }).join('');
                 
                 const addressHtml = o.address ? `<div><strong>Ship to:</strong> ${o.address.name}, +91 ${o.address.phone}</div>
-                    <div>${o.address.line1 || o.address.line || ''} ${o.address.line2 ? '<br/>'+o.address.line2 : ''}</div>
-                    <div>${o.address.city || ''}, ${o.address.state || ''} - ${o.address.pincode || ''}</div>` : '';
+                    <div>${o.address.line || o.address.line1}${o.address.line2 ? '<br>' + o.address.line2 : ''}</div>
+                    <div>${o.address.city}, ${o.address.state} - ${o.address.pincode}</div>` : '';
                 
-                const cancelBtn = o.status === 'Processing' ? `<button onclick="cancelOrder('${o._id}')" class="flex-1 bg-red-100 text-red-700 px-3 py-2 rounded-lg text-sm hover:bg-red-200 transition">Cancel Order</button>` : '';
-                const trackBtn = `<button onclick="openTrackModal('${o._id}')" class="flex-1 bg-blue-100 text-blue-700 px-3 py-2 rounded-lg text-sm hover:bg-blue-200 transition">Track Order</button>`;
+                const trackBtn = o.status !== 'Cancelled' ? `<button onclick="openTrackModal('${o._id}')"
+                    class="flex-1 bg-blue-100 text-blue-700 px-3 py-2 rounded-lg text-sm hover:bg-blue-200 transition">
+                    Track Order
+                </button>` : '';
+
+                const cancelBtn = o.status === 'Processing' ? `<button onclick="cancelOrder('${o._id}')"
+                    class="flex-1 bg-red-100 text-red-700 px-3 py-2 rounded-lg text-sm hover:bg-red-200 transition">
+                    Cancel Order
+                </button>` : '';
                 
                 return `
                     <div class="bg-white p-4 rounded-xl border border-gray-100 mb-4">
@@ -1399,20 +1400,18 @@
                             </div>
                             <div class="text-left sm:text-right">
                                 <p class="font-bold text-green-700">Total: ${formatINR(o.total)}</p>
-                                <span class="text-xs px-2 py-1 ${getStatusColor(o.status)} rounded-full font-medium inline-block mt-1">${o.status}</span>
+                                <span class="${getStatusColor(o.status)} text-xs px-2 py-1 rounded-full font-medium inline-block mt-1">
+                                ${o.status}
+                                </span>
                             </div>
                         </div>
-
-                        <div class="mb-4">
-                            ${itemsHtml}
+                        ${itemsHtml}
+                        <div class="text-sm text-gray-600 mb-4 border-t pt-3">
+                            ${addressHtml}
                         </div>
-
-                        <div class="mt-3 pt-3 border-t border-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                            <div class="text-sm text-gray-600">${addressHtml}</div>
-                            <div class="flex gap-2 w-full sm:w-auto mt-2 sm:mt-0">
-                                ${trackBtn}
-                                ${cancelBtn}
-                            </div>
+                        <div class="flex gap-2">
+                            ${trackBtn}
+                            ${cancelBtn}
                         </div>
                     </div>
                 `;
@@ -2014,9 +2013,9 @@
         async function confirmPayment(paymentId, items, total) {
             try {
                 const res = await fetch(`${API_URL}/payment/confirm`, {
-                    method: "POST",
-                    credentials: "include",
-                    headers: { "Content-Type": "application/json" },
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ paymentId })
                 });
                 const data = await res.json();
@@ -2026,16 +2025,25 @@
                 }
                 
                 const ordRes = await fetch(`${API_URL}/orders`, {
-                    method: "POST",
-                    credentials: "include",
-                    headers: { "Content-Type": "application/json" },
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        // FIXED: Pass weight and use _id correctly
-                        items: items.map(i => ({ _id: i._id, name: i.name, price: i.price, breed: i.breed, weight: i.weight })),
+                        items: items.map(i => ({
+                            _id: i._id || i.id,
+                            name: i.name,
+                            price: i.price,
+                            breed: i.breed,
+                            type: i.type, 
+                            weight: i.weight
+                        })),
                         total,
-                        date: new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                        date: new Date().toLocaleString('en-IN', {
+                            year: 'numeric', month: 'short', day: 'numeric',
+                            hour: '2-digit', minute: '2-digit'
+                        }),
                         address: currentAddress,
-                        status: "Processing"
+                        status: 'Processing'
                     })
                 });
                 if (!ordRes.ok) {
@@ -2044,9 +2052,9 @@
                     return;
                 }
                 
-                cart = [];
-                pendingCheckoutItems = null; 
-                await saveUserState(); 
+                cart = cart.filter(c => !pendingCheckoutItems.some(p => p._id === c._id));
+                pendingCheckoutItems = null;
+                await saveUserState();
                 showToast('Payment Successful! Order Placed.', 'success');
                 
                 document.querySelectorAll('.lm-pay-popup').forEach(e => e.remove());
@@ -2197,5 +2205,5 @@
 
     })();
     </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9b30a4257cdec537',t:'MTc2NjU4NDk5Ni4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</body>
 </html>
