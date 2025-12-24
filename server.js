@@ -7,7 +7,7 @@ const jwt = require('jsonwebtoken');
 const multer = require('multer');
 require('dotenv').config();
 
-// Models (Assuming these models are defined elsewhere)
+// --- CRITICAL: ENSURE THESE FILES EXIST IN A 'models' FOLDER ---
 const Livestock = require('./models/Livestock');
 const Order = require('./models/Order');
 const User = require('./models/User');
@@ -16,16 +16,14 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'change-this-secret';
 
-// Multer config for memory storage (store in DB, not disk)
-const upload = multer({ storage: multer.memoryStorage() });
+// Multer config (Limit file size to 5MB)
+const upload = multer({ 
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 } 
+});
 
 // Middleware
-app.use(
-  cors({
-    origin: true,
-    credentials: true,
-  })
-);
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
 app.use(express.static('public'));
@@ -33,411 +31,333 @@ app.use(express.static('public'));
 // Database Connection
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/livestockmart';
 
-mongoose
-  .connect(MONGODB_URI, {
+mongoose.connect(MONGODB_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
-  })
-  .then(() => console.log('✅ Connected to MongoDB'))
-  .catch((err) => console.error('❌ MongoDB Connection Error:', err));
+})
+.then(() => console.log('✅ Connected to MongoDB'))
+.catch((err) => console.error('❌ MongoDB Connection Error:', err));
 
 // --- AUTH HELPERS ---
-
 function createToken(user) {
-  return jwt.sign(
-    { id: user._id, email: user.email, name: user.name },
-    JWT_SECRET,
-    { expiresIn: '7d' }
-  );
+    return jwt.sign({ id: user._id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
 }
 
 function setAuthCookie(res, token) {
-  res.cookie('token', token, {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-  });
+    res.cookie('token', token, {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
 }
 
 function authMiddleware(req, res, next) {
-  const token = req.cookies && req.cookies.token;
-  if (!token) {
-    return res.status(401).json({ message: 'Not authenticated' });
-  }
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = { id: decoded.id, email: decoded.email, name: decoded.name };
-    next();
-  } catch (err) {
-    return res.status(401).json({ message: 'Invalid or expired token' });
-  }
+    const token = req.cookies && req.cookies.token;
+    if (!token) return res.status(401).json({ message: 'Not authenticated' });
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        req.user = { id: decoded.id, email: decoded.email, name: decoded.name };
+        next();
+    } catch (err) {
+        return res.status(401).json({ message: 'Invalid or expired token' });
+    }
 }
 
-// --- AUTH ROUTES (USER LOGIN REMAINS PROTECTED) ---
-
-// Register
+// --- AUTH ROUTES ---
 app.post('/api/auth/register', async (req, res) => {
-  try {
-    const { name, email, password } = req.body;
+    try {
+        const { name, email, password } = req.body;
+        if (!name || !email || !password) return res.status(400).json({ message: 'All fields required' });
 
-    if (!name || !email || !password) {
-      return res.status(400).json({ message: 'Name, email and password are required' });
+        const existingUser = await User.findOne({ email });
+        if (existingUser) return res.status(409).json({ message: 'Email already exists' });
+
+        const newUser = new User({ name, email, password });
+        await newUser.save();
+
+        const token = createToken(newUser);
+        setAuthCookie(res, token);
+        res.status(201).json({ user: { id: newUser._id, name: newUser.name, email: newUser.email } });
+    } catch (err) {
+        console.error('Registration Error:', err);
+        res.status(500).json({ message: 'Server error during registration' });
     }
-
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(409).json({ message: 'User with this email already exists' });
-    }
-
-    const newUser = new User({ name, email, password });
-    await newUser.save();
-
-    const token = createToken(newUser);
-    setAuthCookie(res, token);
-    res.status(201).json({ user: { id: newUser._id, name: newUser.name, email: newUser.email } });
-  } catch (err) {
-    console.error('Registration error:', err);
-    res.status(500).json({ message: 'Server error during registration' });
-  }
 });
 
-// Login
 app.post('/api/auth/login', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ message: 'Email and password are required' });
-    }
+    try {
+        const { email, password } = req.body;
+        if (!email || !password) return res.status(400).json({ message: 'Credentials required' });
 
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(400).json({ message: 'Invalid email or password' });
-    }
+        const user = await User.findOne({ email });
+        if (!user) return res.status(400).json({ message: 'Invalid credentials' });
 
-    const isMatch = await user.comparePassword(password);
-    if (!isMatch) {
-      return res.status(400).json({ message: 'Invalid email or password' });
-    }
+        if (typeof user.comparePassword !== 'function') {
+            console.error("CRITICAL: User model missing comparePassword method.");
+            return res.status(500).json({ message: 'Server configuration error' });
+        }
 
-    const token = createToken(user);
-    setAuthCookie(res, token);
-    res.json({
-      user: { id: user._id, name: user.name, email: user.email },
-    });
-  } catch (err) {
-    console.error('Login error:', err);
-    res.status(500).json({ message: 'Server error during login' });
-  }
+        const isMatch = await user.comparePassword(password);
+        if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
+
+        const token = createToken(user);
+        setAuthCookie(res, token);
+        res.json({ user: { id: user._id, name: user.name, email: user.email } });
+    } catch (err) {
+        console.error('Login Error:', err);
+        res.status(500).json({ message: 'Server error during login' });
+    }
 });
 
-// Get current user (basic info)
 app.get('/api/auth/me', authMiddleware, (req, res) => {
-  res.json({ user: req.user });
+    res.json({ user: req.user });
 });
 
-// Logout
 app.post('/api/auth/logout', (req, res) => {
-  res.clearCookie('token', { sameSite: 'lax', secure: process.env.NODE_ENV === 'production' });
-  res.json({ message: 'Logged out successfully' });
+    res.clearCookie('token');
+    res.json({ message: 'Logged out' });
 });
 
+// --- ADMIN API ROUTES ---
 
-// ----------------------------------------------------------------------
-// --- ADMIN-SPECIFIC API ROUTES (Authentication REMOVED to solve 401 issue) ---
-// ----------------------------------------------------------------------
-
-// Get All Livestock (Admin)
 app.get('/api/admin/livestock', async (req, res) => {
     try {
         const livestock = await Livestock.find({}).sort({ createdAt: -1 });
         res.json({ livestock });
     } catch (err) {
-        console.error('Admin Livestock error:', err);
-        res.status(500).json({ message: 'Server error loading livestock' });
+        res.status(500).json({ message: 'Failed to load livestock' });
     }
 });
 
-// Add New Livestock (Admin CUD) - Now handles image upload
+// POST Livestock (Admin)
 app.post('/api/admin/livestock', upload.single('image'), async (req, res) => {
     try {
-        const { name, type, breed, age, price, tags, status } = req.body;
-        // FIX: The user app expected 'type' which was missing in original server.js
-        if (!type) {
-            return res.status(400).json({ message: 'Livestock type is required' });
-        }
+        const { name, type, breed, age, price, tags, status, weight } = req.body;
+
+        if (!name || !type || !price) return res.status(400).json({ message: 'Missing required fields' });
+
+        const image = req.file ? { data: req.file.buffer, contentType: req.file.mimetype } : undefined;
         
-        const image = req.file ? {
-            data: req.file.buffer,
-            contentType: req.file.mimetype
-        } : undefined;
+        let tagArray = [];
+        if (tags && typeof tags === 'string') {
+            tagArray = tags.split(',').map(t => t.trim()).filter(t => t.length > 0);
+        }
 
         const newItem = new Livestock({
-            name, type, breed, age, price, tags: tags ? tags.split(',') : [], status,
-            image
+            name, type, breed, age, 
+            weight: weight || "N/A", 
+            price: parseFloat(price) || 0,
+            tags: tagArray, 
+            status, image
         });
+
         await newItem.save();
         res.status(201).json(newItem);
     } catch (err) {
-        console.error('Admin Add Livestock error:', err);
+        console.error('Add Livestock Error:', err);
         res.status(500).json({ error: err.message });
     }
 });
 
-// Update Existing Livestock (Admin) - Handles optional image update
+// PUT Livestock (Admin)
 app.put('/api/admin/livestock/:id', upload.single('image'), async (req, res) => {
     try {
-        const { name, type, breed, age, price, tags, status } = req.body;
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
 
-        const updates = {
-            name,
-            type,
-            breed,
-            age,
-            price: parseFloat(price),
-            status,
+        const { name, type, breed, age, price, tags, status, weight } = req.body;
+        
+        const updates = { 
+            name, type, breed, age, 
+            weight,
+            price: parseFloat(price) || 0, 
+            status 
         };
 
         if (tags) {
             updates.tags = typeof tags === 'string' ? tags.split(',').map(t => t.trim()) : tags;
         }
 
-        // Only update image if a new file was uploaded
         if (req.file) {
-            updates.image = {
-                data: req.file.buffer,
-                contentType: req.file.mimetype
-            };
+            updates.image = { data: req.file.buffer, contentType: req.file.mimetype };
         }
 
         const livestock = await Livestock.findByIdAndUpdate(req.params.id, updates, { new: true });
-
-        if (!livestock) {
-            return res.status(404).json({ message: "Livestock not found" });
-        }
+        if (!livestock) return res.status(404).json({ message: "Item not found" });
 
         res.json(livestock);
     } catch (err) {
-        console.error('Admin Update Livestock error:', err);
-        res.status(500).json({ message: 'Server error updating livestock' });
+        console.error('Update Livestock Error:', err);
+        res.status(500).json({ message: 'Server error updating' });
     }
 });
 
-// Remove Livestock (Admin CUD - New)
 app.delete('/api/admin/livestock/:id', async (req, res) => {
     try {
-        const result = await Livestock.findByIdAndDelete(req.params.id);
-        if (!result) return res.status(404).json({ message: "Livestock not found" });
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
+        await Livestock.findByIdAndDelete(req.params.id);
         res.status(204).send();
     } catch (err) {
-        console.error('Admin Delete Livestock error:', err);
-        res.status(500).json({ message: 'Server error deleting livestock' });
+        res.status(500).json({ message: 'Delete failed' });
     }
 });
 
-// Get All Orders (Admin)
 app.get('/api/admin/orders', async (req, res) => {
     try {
         const orders = await Order.find({}).sort({ createdAt: -1 });
         res.json({ orders });
     } catch (err) {
-        console.error('Admin Orders error:', err);
-        res.status(500).json({ message: 'Server error loading orders' });
+        res.status(500).json({ message: 'Failed to load orders' });
     }
 });
 
-// Update Order Status (Admin CUD)
 app.put('/api/admin/orders/:id', async (req, res) => {
     try {
-        const { status } = req.body;
-        const order = await Order.findByIdAndUpdate(req.params.id, { status }, { new: true });
-        if (!order) return res.status(404).json({ message: "Order not found" });
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
+        const order = await Order.findByIdAndUpdate(req.params.id, { status: req.body.status }, { new: true });
         res.json(order);
     } catch (err) {
-        console.error('Admin Update Order error:', err);
-        res.status(500).json({ message: 'Server error updating order' });
+        res.status(500).json({ message: 'Update failed' });
     }
 });
 
-// Get All Users (Admin/Customers List)
 app.get('/api/admin/users', async (req, res) => {
     try {
-        // Only fetch non-sensitive data
         const users = await User.find({}, 'name email createdAt').sort({ createdAt: -1 });
         res.json({ users });
     } catch (err) {
-        console.error('Admin Users error:', err);
-        res.status(500).json({ message: 'Server error loading users' });
+        res.status(500).json({ message: 'Failed to load users' });
     }
 });
 
-// ----------------------------------------------------------------------
-// --- USER/PUBLIC API ROUTES (Filtered Data & User State) ---
-// ----------------------------------------------------------------------
+// --- PUBLIC/USER ROUTES ---
 
-// Get Available Livestock (User/Public)
 app.get('/api/livestock', async (req, res) => {
-  try {
-    // User app only sees 'Available' livestock
-    // FIX: Include necessary fields for the client, including the _id for image fetching
-    const livestock = await Livestock.find({ status: 'Available' }, '_id name type breed age price tags');
-    res.json(livestock);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Get Single Livestock Item by ID (Public - FIX to ensure API completeness)
-app.get('/api/livestock/:id', async (req, res) => {
-  try {
-    const livestockItem = await Livestock.findById(req.params.id, '_id name type breed age price tags');
-    if (!livestockItem) {
-        return res.status(404).json({ message: "Livestock item not found" });
+    try {
+        const livestock = await Livestock.find({ status: 'Available' }, '-image'); 
+        res.json(livestock);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
-    res.json(livestockItem);
-  } catch (err) {
-    console.error('Fetch single livestock error:', err);
-    res.status(500).json({ error: 'Server error fetching item details' });
-  }
 });
 
-// Serve Livestock Image (Public)
 app.get('/api/livestock/image/:id', async (req, res) => {
-  try {
-    // FIX: Ensure image data is retrieved correctly from the model
-    const livestock = await Livestock.findById(req.params.id, 'image');
-    if (!livestock || !livestock.image || !livestock.image.data) {
-      return res.status(404).send('Image not found');
+    try {
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(404).send('Invalid ID');
+        const livestock = await Livestock.findById(req.params.id, 'image');
+        if (!livestock || !livestock.image || !livestock.image.data) return res.status(404).send('Image not found');
+        
+        res.set('Content-Type', livestock.image.contentType);
+        res.send(livestock.image.data);
+    } catch (err) {
+        console.error('Image Error:', err);
+        res.status(500).send('Server Error');
     }
-    res.set('Content-Type', livestock.image.contentType);
-    // Send the binary data
-    res.send(livestock.image.data);
-  } catch (err) {
-    console.error('Image serve error:', err);
-    res.status(500).send('Server error');
-  }
 });
 
-// Get User Orders (User-Specific)
 app.get('/api/orders', authMiddleware, async (req, res) => {
-  try {
-    // User app only sees their own orders
-    const orders = await Order.find({ userId: req.user.id }).sort({ createdAt: -1 });
-    res.json(orders);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+    try {
+        const orders = await Order.find({ userId: req.user.id }).sort({ createdAt: -1 });
+        res.json(orders);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-// Create Order (User)
-app.post('/api/orders', authMiddleware, async (req, res) => {
-  try {
-    const newOrder = new Order({
-      ...req.body,
-      userId: req.user.id,
-      customer: req.user.name,
-    });
-    await newOrder.save();
-    // After successful order creation, clear cart state from user's document
-    // FIX: This clears the cart from the persistent user state which is what we want
-    await User.findByIdAndUpdate(req.user.id, { $set: { cart: [] } });
-    res.status(201).json(newOrder);
-  } catch (err) {
-    console.error('Create order error:', err);
-    res.status(500).json({ error: err.message || 'Failed to create order' });
-  }
-});
-
-// Cancel order (User)
+// ✅ UPDATED: Cancel Order Route (With Validation)
 app.put('/api/orders/:id/cancel', authMiddleware, async (req, res) => {
-  try {
-    const order = await Order.findById(req.params.id);
-    if (!order) return res.status(404).json({ message: "Order not found" });
-    if (String(order.userId) !== req.user.id) return res.status(403).json({ message: "Unauthorized" });
-    if (order.status !== "Processing") return res.status(400).json({ message: "Only processing orders can be cancelled" });
+    try {
+        const orderId = req.params.id;
+        const userId = req.user.id; 
 
-    order.status = "Cancelled";
-    await order.save();
-    res.json(order);
-  } catch (err) {
-    console.error('Cancel order error:', err);
-    res.status(500).json({ message: 'Cancel failed' });
-  }
+        if (!mongoose.Types.ObjectId.isValid(orderId)) {
+            return res.status(400).json({ message: 'Invalid Order ID' });
+        }
+
+        const order = await Order.findOne({ _id: orderId, userId: userId });
+        if (!order) return res.status(404).json({ message: 'Order not found' });
+
+        // Only allow cancellation if order is still Processing
+        if (order.status !== 'Processing') {
+            return res.status(400).json({ message: `Cannot cancel order with status: ${order.status}` });
+        }
+
+        order.status = 'Cancelled';
+        await order.save();
+        res.json({ success: true, message: 'Order cancelled', order });
+    } catch (err) {
+        console.error('Cancel Order Error:', err);
+        res.status(500).json({ message: 'Server error during cancellation' });
+    }
 });
 
-// User State (Cart, Wishlist, Addresses) - PERSISTENCE FIX
+app.post('/api/orders', authMiddleware, async (req, res) => {
+    try {
+        const newOrder = new Order({ ...req.body, userId: req.user.id, customer: req.user.name });
+        await newOrder.save();
+        await User.findByIdAndUpdate(req.user.id, { $set: { cart: [] } });
+        res.status(201).json(newOrder);
+    } catch (err) {
+        console.error('Order Error:', err);
+        res.status(500).json({ error: 'Order creation failed' });
+    }
+});
+
+// ✅ UPDATED: User State with Notifications
 app.get('/api/user/state', authMiddleware, async (req, res) => {
-  try {
-    // FIX: Retrieve the persistent fields from the User model
-    const user = await User.findById(req.user.id, 'cart wishlist addresses');
-    // Ensure we always return an object even if fields are null
-    res.json({
-        cart: user.cart || [],
-        wishlist: user.wishlist || [],
-        addresses: user.addresses || []
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+    try {
+        const user = await User.findById(req.user.id);
+        res.json({ 
+            cart: user.cart || [], 
+            wishlist: user.wishlist || [], 
+            addresses: user.addresses || [],
+            notifications: user.notifications || [] 
+        });
+    } catch (err) { 
+        res.status(500).json({ error: err.message }); 
+    }
 });
 
+// ✅ UPDATED: Sync User State with Notifications
 app.put('/api/user/state', authMiddleware, async (req, res) => {
-  try {
-    const { cart, wishlist, addresses } = req.body;
-    // FIX: Update the persistent fields in the User model
-    await User.findByIdAndUpdate(req.user.id, { $set: { cart, wishlist, addresses } });
-    res.json({ message: 'State updated' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+    try {
+        const { cart, wishlist, addresses, notifications } = req.body;
+        await User.findByIdAndUpdate(req.user.id, { 
+            $set: { cart, wishlist, addresses, notifications } 
+        });
+        res.json({ message: 'State synchronized' });
+    } catch (err) { 
+        res.status(500).json({ error: err.message }); 
+    }
 });
 
-// Payment simulation routes (updated to use env variables)
-app.post('/api/payment/create', authMiddleware, async (req, res) => {
-  // Simple simulation of creating a payment session
-  try {
-    const { amount } = req.body;
-    const paymentId = 'PAY_' + Date.now();
-
-    // Use environment variables for the receiver's UPI and Name
-    const receiverUpi = process.env.RECEIVER_UPI || 'sai.kambala@ybl'; // Fallback if not set
-    const receiverName = process.env.RECEIVER_NAME || 'Kambala Satya Sai Venkatakonda'; // Fallback if not set
-
-    // Construct the UPI string using the real receiver details
-    const upiString = `upi://pay?pa=${encodeURIComponent(receiverUpi)}&pn=${encodeURIComponent(receiverName)}&mc=0000&tid=${paymentId}&tr=${paymentId}&am=${amount}`;
-
-    res.json({ upiString, paymentId });
-  } catch (err) {
-    console.error('Create payment error:', err);
-    res.status(500).json({ message: 'Failed to create payment' });
-  }
+// Legacy Notifications Route (Retained for compatibility, returns empty to prevent errors)
+app.get('/api/notifications', authMiddleware, (req, res) => {
+    res.json([]); 
 });
 
-app.post('/api/payment/confirm', authMiddleware, async (req, res) => {
-  // Simple simulation of confirming payment
-  try {
-    const { paymentId } = req.body;
-    if (!paymentId) return res.status(400).json({ message: "Payment ID missing" });
-    // In a real app, you would verify the payment with a provider like Razorpay/Stripe here.
-    return res.json({ success: true });
-  } catch (err) {
-    console.error('Confirm payment error:', err);
-    res.status(500).json({ message: 'Payment confirm failed' });
-  }
+app.post('/api/payment/create', authMiddleware, (req, res) => {
+    try {
+        const { amount } = req.body;
+        const paymentId = 'PAY_' + Date.now();
+        const upiString = `upi://pay?pa=${process.env.UPI_ID || 'sai.kambala@ybl'}&pn=LivestockMart&am=${amount}`;
+        res.json({ upiString, paymentId });
+    } catch (err) {
+        res.status(500).json({ message: 'Payment Error' });
+    }
 });
 
+app.post('/api/payment/confirm', authMiddleware, (req, res) => res.json({ success: true }));
 
-// Serve Static Files and Start Server
-const PUBLIC_DIR = path.join(__dirname, 'public');
-
-app.get('/admin', (req, res) => {
-  res.sendFile(path.join(PUBLIC_DIR, 'admin.html'));
+app.use((err, req, res, next) => {
+    if (err instanceof multer.MulterError) {
+        return res.status(400).json({ message: `Upload error: ${err.message}` });
+    }
+    console.error('Global Error:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
 });
 
-app.get('/', (req, res) => {
-  res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
-});
+app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
