@@ -258,6 +258,54 @@ app.get('/api/admin/orders', async (req, res) => {
     }
 });
 
+// NEW: Serve Payment Proof
+app.get('/api/admin/orders/proof/:id', async (req, res) => {
+    try {
+        const order = await Order.findById(req.params.id);
+        if (!order || !order.paymentProof || !order.paymentProof.data) return res.status(404).send('No proof found');
+        
+        res.set('Content-Type', order.paymentProof.contentType);
+        res.send(order.paymentProof.data);
+    } catch (err) {
+        res.status(500).send('Server Error');
+    }
+});
+
+// NEW: Reject Payment with Reason & Notification
+app.put('/api/admin/orders/:id/reject', async (req, res) => {
+    try {
+        const { reason } = req.body;
+        const order = await Order.findByIdAndUpdate(
+            req.params.id, 
+            { 
+                status: 'Payment Rejected', 
+                rejectionReason: reason || 'Invalid payment proof.'
+            }, 
+            { new: true }
+        );
+        
+        if (!order) return res.status(404).json({ message: 'Order not found' });
+
+        // Notify User
+        await User.findByIdAndUpdate(order.userId, { 
+            $push: { notifications: {
+                id: 'rej_' + Date.now(), 
+                title: 'Payment Rejected', 
+                message: `Order #${order._id.toString().slice(-6)} proof rejected: ${reason}`,
+                icon: 'alert-circle', 
+                color: 'red', 
+                timestamp: Date.now(), 
+                seen: false
+            }}
+        });
+
+        res.json({ success: true, message: 'Order rejected and user notified' });
+    } catch (err) { 
+        console.error("Reject Error:", err);
+        res.status(500).json({ error: err.message }); 
+    }
+});
+
 app.put('/api/admin/orders/:id', async (req, res) => {
     try {
         const order = await Order.findByIdAndUpdate(req.params.id, { status: req.body.status }, { new: true });
@@ -286,7 +334,30 @@ app.get('/api/orders', authMiddleware, async (req, res) => {
     }
 });
 
-// CHANGED: Now accepts Payment Proof File and parses body strings
+// NEW: User Re-upload Proof
+app.put('/api/orders/:id/reupload', authMiddleware, upload.single('paymentProof'), async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).send('No file uploaded');
+
+        const order = await Order.findOne({ _id: req.params.id, userId: req.user.id });
+        if (!order) return res.status(404).json({ message: 'Order not found' });
+
+        await Order.findByIdAndUpdate(req.params.id, {
+            status: 'Processing',
+            rejectionReason: '',
+            paymentProof: { 
+                data: req.file.buffer, 
+                contentType: req.file.mimetype 
+            }
+        });
+        
+        res.json({ success: true, message: 'Proof re-uploaded successfully' });
+    } catch (err) {
+        console.error("Re-upload Error:", err);
+        res.status(500).json({ message: 'Re-upload failed' });
+    }
+});
+
 app.post('/api/orders', authMiddleware, upload.single('paymentProof'), async (req, res) => {
     try {
         // Since we are using FormData on frontend, items and address are sent as strings
