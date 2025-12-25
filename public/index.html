@@ -1857,14 +1857,13 @@
                 dateEl.innerText = new Date().toLocaleDateString('en-IN', dateOptions);
             }
             router('dashboard');
-            
+            // --- OPTIMIZATION: Increased Polling to 15 seconds ---
             autoRefreshInterval = setInterval(() => {
                 loadData();
-            }, 2000);
+            }, 15000); // Changed from 2000 to 15000
             
             initPullToRefresh();
         }
-
         function initPullToRefresh() {
             let startY = 0;
             let currentY = 0;
