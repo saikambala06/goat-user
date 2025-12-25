@@ -2,8 +2,6 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 // --- FIX: Relaxed Schema to prevent 500/400 Errors ---
-// removed 'required: true' to prevent validation crashes on partial data
-
 const cartItemSchema = new mongoose.Schema({
     _id: { type: String }, // Kept as String to match frontend ID
     name: { type: String },
@@ -31,7 +29,8 @@ const notificationSchema = new mongoose.Schema({
     message: String,
     icon: String,
     color: String,
-    timestamp: { type: Number, default: Date.now }
+    timestamp: { type: Number, default: Date.now },
+    seen: { type: Boolean, default: false } // <--- NEW: Added for badge logic
 }, { _id: false });
 
 const userSchema = new mongoose.Schema({
