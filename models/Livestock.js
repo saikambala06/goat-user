@@ -2,15 +2,12 @@ const mongoose = require('mongoose');
 
 const livestockSchema = new mongoose.Schema({
     name: { type: String, required: true },
-    type: { type: String, required: true }, // Goat or Sheep
+    type: { type: String, required: true }, 
     breed: { type: String, required: true },
     age: { type: String, required: true },
     weight: { type: String, required: true }, 
     price: { type: Number, required: true },
-    image: {
-        data: { type: Buffer },
-        contentType: { type: String }
-    },
+    image: { data: Buffer, contentType: String },
     tags: [String],
     status: { type: String, default: 'Available' },
     createdAt: { type: Date, default: Date.now }
