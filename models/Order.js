@@ -8,7 +8,6 @@ const orderSchema = new mongoose.Schema({
         _id: String,
         name: String,
         price: Number,
-        type: String,
         breed: String,
         weight: String
     }],
