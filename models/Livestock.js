@@ -5,15 +5,12 @@ const livestockSchema = new mongoose.Schema({
     type: { type: String, required: true }, // Goat or Sheep
     breed: { type: String, required: true },
     age: { type: String, required: true },
-    
-    // ADDED WEIGHT FIELD HERE
     weight: { type: String, required: true }, 
-
     price: { type: Number, required: true },
     image: {
         data: { type: Buffer },
         contentType: { type: String }
-    }, // Binary image data (optional)
+    },
     tags: [String],
     status: { type: String, default: 'Available' },
     createdAt: { type: Date, default: Date.now }
