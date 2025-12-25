@@ -1,11 +1,8 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
-// --- FIX: Relaxed Schema to prevent 500/400 Errors ---
-// removed 'required: true' to prevent validation crashes on partial data
-
 const cartItemSchema = new mongoose.Schema({
-    _id: { type: String }, // Kept as String to match frontend ID
+    _id: { type: String },
     name: { type: String },
     price: { type: Number },
     breed: { type: String },
@@ -31,24 +28,21 @@ const notificationSchema = new mongoose.Schema({
     message: String,
     icon: String,
     color: String,
-    timestamp: { type: Number, default: Date.now }
+    timestamp: { type: Number, default: Date.now },
+    seen: { type: Boolean, default: false }
 }, { _id: false });
 
 const userSchema = new mongoose.Schema({
     name: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     password: { type: String, required: true },
-    
-    // User State Arrays
     cart: [cartItemSchema], 
     wishlist: [{ type: String }],
     addresses: [addressSchema],
     notifications: [notificationSchema], 
-    
     createdAt: { type: Date, default: Date.now },
 });
 
-// Password hashing
 userSchema.pre('save', async function (next) {
     if (!this.isModified('password')) return next();
     try {
