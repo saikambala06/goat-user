@@ -541,6 +541,7 @@
         let pendingCheckoutItems = null;
         let editingAddressIndex = -1;
         let autoRefreshInterval = null; 
+        let proofUploaded = false; // New variable to track proof upload
         
         function initTheme() {
             if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
@@ -1361,7 +1362,7 @@
                 }).join('');
                 
                 const addressHtml = o.address ? `<div><strong>Ship to:</strong> ${o.address.name}, +91 ${o.address.phone}</div>
-                    <div>${o.address.line || o.address.line1}${o.address.line2 ? '<br>' + o.address.line2 : ''}</div>
+                    <div>${o.address.line1 || o.address.line}${o.address.line2 ? '<br>' + o.address.line2 : ''}</div>
                     <div>${o.address.city}, ${o.address.state} - ${o.address.pincode}</div>` : '';
                 
                 const trackBtn = o.status !== 'Cancelled' ? `<button onclick="openTrackModal('${o._id}')"
@@ -1633,7 +1634,7 @@
             const addressData = { 
                 name, 
                 phone, 
-                line1: line, 
+                line1: line, // Ensured line1 to match backend schema
                 city, 
                 state, 
                 pincode,
@@ -1649,7 +1650,7 @@
             if (!currentAddress || editingAddressIndex === 0) {
                 currentAddress = addresses[0];
             }
-            await saveUserState(); 
+            await saveUserState(); // Saving to DB
             renderAddresses();
             closeAddressModal();
             if (pendingCheckoutItems && pendingCheckoutItems.length > 0) {
@@ -1955,13 +1956,15 @@
         });
         
         function showPaymentUI(upiString, paymentId, itemsToBuy, total) {
+            proofUploaded = false; // Reset on new payment
             document.querySelectorAll('.lm-pay-popup').forEach(e => e.remove());
             const payBox = document.createElement("div");
             payBox.className = "lm-pay-popup fixed inset-0 flex items-center justify-center bg-black/60 z-50 px-4 backdrop-blur-sm";
             payBox.innerHTML = `
-                <div class="bg-white dark:bg-gray-800 w-full max-w-md p-6 rounded-2xl text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-gray-700">
+                <div class="bg-white dark:bg-gray-800 w-full max-w-md p-6 rounded-2xl text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-gray-700 max-h-[90vh] overflow-y-auto">
                     <h2 class="text-xl font-bold mb-3">Complete Payment</h2>
-                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">Choose your preferred UPI app.</p>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Scan QR code or use UPI apps.</p>
+                    
                     <div class="grid grid-cols-2 gap-4 mb-6">
                         <a href="${upiString}" class="pay-icon-btn flex flex-col items-center justify-center p-4 border dark:border-gray-600 rounded-xl hover:bg-purple-50 dark:hover:bg-purple-900/20 transition bg-white dark:bg-gray-700">
                             <img src="https://uxwing.com/wp-content/themes/uxwing/download/brands-and-social-media/phonepe-icon.png" alt="PhonePe" class="w-12 h-12 mb-2 object-contain">
@@ -1976,24 +1979,57 @@
                             <img src="https://uxwing.com/wp-content/themes/uxwing/download/brands-and-social-media/bhim-upi-icon.png" alt="BHIM" class="w-12 h-12 mb-2 object-contain" onerror="this.src='https://placehold.co/100x100/orange/white?text=BHIM'">
                         </a>
                     </div>
-                    <div class="mt-4 text-center">
+
+                    <div class="mt-4 text-center border-b dark:border-gray-700 pb-4 mb-4">
                         <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(upiString)}" class="mx-auto rounded-lg border dark:border-gray-600 shadow-sm"/>
                         <p class="text-xs text-gray-500 dark:text-gray-400 mt-3 font-semibold">Scan & Pay • Amount: ₹${total}</p>
                     </div>
-                    <button id="lm-paid-btn" class="w-full bg-green-600 text-white py-3 mt-6 rounded-xl font-bold text-lg shadow-lg hover:bg-green-700 transition transform active:scale-95">
+
+                    <div class="space-y-3">
+                        <p class="text-sm font-medium text-gray-700 dark:text-gray-300">Upload Payment Screenshot</p>
+                        <div id="proof-container" class="relative">
+                            <input type="file" id="payment-proof-input" accept="image/*" class="hidden" onchange="handleProofUpload(this)">
+                            <button onclick="document.getElementById('payment-proof-input').click()" class="w-full flex items-center justify-center gap-2 border-2 border-dashed border-gray-300 dark:border-gray-600 py-4 rounded-xl hover:border-emerald-500 transition-colors" id="upload-btn-ui">
+                                <i data-lucide="upload-cloud" class="w-5 h-5 text-gray-400"></i>
+                                <span class="text-sm text-gray-500" id="proof-text">Select Screenshot</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <button id="lm-paid-btn" class="w-full bg-emerald-600 text-white py-3 mt-6 rounded-xl font-bold text-lg shadow-lg hover:bg-emerald-700 transition transform active:scale-95">
                         I Have Paid
                     </button>
                     <button id="lm-cancel-btn" class="w-full text-gray-500 dark:text-gray-400 mt-3 text-sm font-medium hover:text-gray-700 dark:hover:text-gray-200">Cancel Payment</button>
                 </div>
             `;
             document.body.appendChild(payBox);
+            lucide.createIcons();
+
             document.getElementById('lm-paid-btn').onclick = function() {
+                if (!proofUploaded) {
+                    showToast('Please upload screenshot of proof', 'warning');
+                    return;
+                }
                 confirmPayment(paymentId, itemsToBuy, total);
             };
             document.getElementById('lm-cancel-btn').onclick = function() {
                 document.querySelectorAll('.lm-pay-popup').forEach(e => e.remove());
             };
         }
+
+        function handleProofUpload(input) {
+            if (input.files && input.files[0]) {
+                proofUploaded = true;
+                const btnUi = document.getElementById('upload-btn-ui');
+                const textUi = document.getElementById('proof-text');
+                btnUi.classList.add('border-emerald-500', 'bg-emerald-50', 'dark:bg-emerald-900/20');
+                textUi.innerText = "Screenshot Selected: " + input.files[0].name;
+                textUi.classList.remove('text-gray-500');
+                textUi.classList.add('text-emerald-600', 'dark:text-emerald-400');
+                showToast('Proof attached successfully', 'success');
+            }
+        }
+
         async function confirmPayment(paymentId, items, total) {
             try {
                 const res = await fetch(`${API_URL}/payment/confirm`, {
