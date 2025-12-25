@@ -8,8 +8,8 @@ const orderSchema = new mongoose.Schema({
         _id: String,
         name: String,
         price: Number,
-        breed: String,
         type: String,
+        breed: String,
         weight: String
     }],
     total: { type: Number, required: true },
