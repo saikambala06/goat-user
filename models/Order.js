@@ -3,16 +3,16 @@ const mongoose = require('mongoose');
 const orderSchema = new mongoose.Schema({
     customer: { type: String, required: true },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    date: { type: String, required: true }, // Keeping string for simplicity matching frontend
+    date: { type: String, required: true },
     items: [{
-        _id: String, // Changed from id to _id to match frontend handling
+        _id: String,
         name: String,
         price: Number,
         breed: String,
-        weight: String // Added to ensure weight persists in order details
+        weight: String
     }],
     total: { type: Number, required: true },
-    status: { type: String, default: 'Processing' }, // Processing, Shipped, Delivered
+    status: { type: String, default: 'Processing' },
     address: {
         name: String,
         phone: String,
@@ -21,6 +21,11 @@ const orderSchema = new mongoose.Schema({
         city: String,
         state: String,
         pincode: String
+    },
+    // NEW: Payment Proof Image
+    paymentProof: {
+        data: Buffer,
+        contentType: String
     },
     createdAt: { type: Date, default: Date.now }
 });
