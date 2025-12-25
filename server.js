@@ -169,8 +169,6 @@ app.put('/api/user/state', authMiddleware, async (req, res) => {
 // --- LIVESTOCK ROUTES ---
 app.get('/api/livestock', async (req, res) => {
     try {
-        // CHANGED: Fetch ALL items (removed status: 'Available' filter)
-        // This allows the frontend to see 'Sold' items and render them as Out of Stock
         const livestock = await Livestock.find({}, '-image'); 
         res.json(livestock);
     } catch (err) {
@@ -288,14 +286,34 @@ app.get('/api/orders', authMiddleware, async (req, res) => {
     }
 });
 
-app.post('/api/orders', authMiddleware, async (req, res) => {
+// CHANGED: Now accepts Payment Proof File and parses body strings
+app.post('/api/orders', authMiddleware, upload.single('paymentProof'), async (req, res) => {
     try {
+        // Since we are using FormData on frontend, items and address are sent as strings
+        const items = req.body.items ? JSON.parse(req.body.items) : [];
+        const address = req.body.address ? JSON.parse(req.body.address) : {};
+        const total = req.body.total;
+        const date = req.body.date;
+
+        const paymentProof = req.file ? {
+            data: req.file.buffer,
+            contentType: req.file.mimetype
+        } : undefined;
+
         // 1. Create the Order
-        const newOrder = new Order({ ...req.body, userId: req.user.id, customer: req.user.name });
+        const newOrder = new Order({ 
+            items,
+            address,
+            total,
+            date,
+            paymentProof,
+            userId: req.user.id, 
+            customer: req.user.name 
+        });
         await newOrder.save();
 
         // 2. Mark purchased items as 'Sold' in Inventory
-        const itemIds = req.body.items.map(item => item._id);
+        const itemIds = items.map(item => item._id);
         if (itemIds.length > 0) {
             await Livestock.updateMany(
                 { _id: { $in: itemIds } }, 
