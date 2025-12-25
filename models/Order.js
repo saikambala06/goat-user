@@ -9,10 +9,12 @@ const orderSchema = new mongoose.Schema({
         name: String,
         price: Number,
         breed: String,
-        weight: String
+        weight: String,
+        type: String
     }],
     total: { type: Number, required: true },
-    status: { type: String, default: 'Processing' },
+    status: { type: String, default: 'Processing' }, // Processing, Shipped, Delivered, Payment Rejected
+    rejectionReason: { type: String, default: '' },
     address: {
         name: String,
         phone: String,
@@ -22,7 +24,6 @@ const orderSchema = new mongoose.Schema({
         state: String,
         pincode: String
     },
-    // NEW: Payment Proof Image
     paymentProof: {
         data: Buffer,
         contentType: String
