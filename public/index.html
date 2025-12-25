@@ -250,30 +250,33 @@
             
             <nav class="flex-1 px-4 space-y-2 overflow-y-auto min-h-0 pb-24 md:pb-4">
                 <button onclick="router('browse')" class="nav-item w-full flex items-center gap-3 px-4 py-3 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
-                    <i data-lucide="home" class="w-5 h-5 flex-shrink-0"></i> Browse Livestock
+                    <i data-lucide="home" class="w-5 h-5 flex-shrink-0"></i> <span class="lang-browse">Browse Livestock</span>
                 </button>
                 <button onclick="router('dashboard')" class="nav-item w-full flex items-center gap-3 px-4 py-3 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
-                    <i data-lucide="layout-dashboard" class="w-5 h-5 flex-shrink-0"></i> My Dashboard
+                    <i data-lucide="layout-dashboard" class="w-5 h-5 flex-shrink-0"></i> <span class="lang-dashboard">My Dashboard</span>
                 </button>
                 <button onclick="router('cart')" class="nav-item w-full flex items-center gap-3 px-4 py-3 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
-                    <i data-lucide="shopping-cart" class="w-5 h-5 flex-shrink-0"></i> Shopping Cart
+                    <i data-lucide="shopping-cart" class="w-5 h-5 flex-shrink-0"></i> <span class="lang-cart">Shopping Cart</span>
                     <span id="cart-badge" class="ml-auto bg-red-500 text-white text-xs px-2 py-0.5 rounded-full hidden">0</span>
                 </button>
                 <button onclick="router('orders')" class="nav-item w-full flex items-center gap-3 px-4 py-3 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
-                    <i data-lucide="package" class="w-5 h-5 flex-shrink-0"></i> My Orders
+                    <i data-lucide="package" class="w-5 h-5 flex-shrink-0"></i> <span class="lang-orders">My Orders</span>
                 </button>
                 <button onclick="router('wishlist')" class="nav-item w-full flex items-center gap-3 px-4 py-3 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
-                    <i data-lucide="heart" class="w-5 h-5 flex-shrink-0"></i> Wishlist
+                    <i data-lucide="heart" class="w-5 h-5 flex-shrink-0"></i> <span class="lang-wishlist">Wishlist</span>
                     <span id="wishlist-badge" class="ml-auto bg-pink-500 text-white text-xs px-2 py-0.5 rounded-full hidden">0</span>
                 </button>
                 <button onclick="router('addresses')" class="nav-item w-full flex items-center gap-3 px-4 py-3 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
-                    <i data-lucide="map-pin" class="w-5 h-5 flex-shrink-0"></i> Addresses
+                    <i data-lucide="map-pin" class="w-5 h-5 flex-shrink-0"></i> <span class="lang-addresses">Addresses</span>
                 </button>
                 <button onclick="router('profile')" class="nav-item w-full flex items-center gap-3 px-4 py-3 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
                     <i data-lucide="user" class="w-5 h-5 flex-shrink-0"></i> Profile
                 </button>
                 <button onclick="router('support')" class="nav-item w-full flex items-center gap-3 px-4 py-3 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
-                    <i data-lucide="headphones" class="w-5 h-5 flex-shrink-0"></i> Support
+                    <i data-lucide="headphones" class="w-5 h-5 flex-shrink-0"></i> <span class="lang-support">Support</span>
+                </button>
+                <button onclick="router('about')" class="nav-item w-full flex items-center gap-3 px-4 py-3 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                    <i data-lucide="info" class="w-5 h-5 flex-shrink-0"></i> <span class="lang-about">About</span>
                 </button>
             </nav>
         </aside>
@@ -290,6 +293,17 @@
                     </div>
                 </div>
                 <div class="flex items-center gap-3 md:gap-6">
+                    
+                    <div class="relative">
+                        <button onclick="document.getElementById('lang-menu').classList.toggle('hidden')" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition">
+                            <i data-lucide="languages" class="w-6 h-6 text-gray-600 dark:text-gray-300"></i>
+                        </button>
+                        <div id="lang-menu" class="absolute right-0 mt-2 w-32 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl shadow-xl py-2 hidden z-50">
+                            <button onclick="changeLanguage('en')" class="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200">English</button>
+                            <button onclick="changeLanguage('te')" class="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200">తెలుగు</button>
+                        </div>
+                    </div>
+
                     <div class="relative">
                         <button id="notification-button" onclick="toggleNotificationMenu()" class="focus:outline-none p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition relative">
                             <i data-lucide="bell" class="w-6 h-6 text-gray-600 dark:text-gray-300 pointer-events-none"></i>
@@ -377,7 +391,7 @@
                     
                     <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm transition-colors">
                         <div class="p-6 border-b border-gray-200 dark:border-gray-700">
-                            <h3 class="font-bold text-gray-800 dark:text-white">Recent Orders</h3>
+                            <h3 class="font-bold text-gray-800 dark:text-white lang-recent-orders">Recent Orders</h3>
                         </div>
                         <div class="p-4 md:p-6 space-y-4" id="dash-recent-orders"></div>
                     </div>
@@ -404,7 +418,7 @@
                         <div id="cart-items-container" class="space-y-6"></div>
                         <div class="mt-8 pt-6 border-t border-gray-100 dark:border-gray-700 flex flex-col sm:flex-row justify-between items-center gap-4">
                             <h3 class="text-xl font-bold text-gray-800 dark:text-white">Total: <span id="cart-total">0</span></h3>
-                            <button onclick="checkout()" class="w-full sm:w-auto bg-gray-800 dark:bg-gray-700 text-white px-8 py-3 rounded-lg font-medium hover:bg-gray-900 dark:hover:bg-gray-600 transition">Proceed to Checkout</button>
+                            <button onclick="checkout()" class="w-full sm:w-auto bg-gray-800 dark:bg-gray-700 text-white px-8 py-3 rounded-lg font-medium hover:bg-gray-900 dark:hover:bg-gray-600 transition lang-checkout">Proceed to Checkout</button>
                         </div>
                     </div>
                 </div>
@@ -415,7 +429,7 @@
                             <button onclick="router('cart')" class="text-gray-500 hover:text-gray-800 dark:hover:text-gray-200">
                                 <i data-lucide="arrow-left" class="w-5 h-5"></i>
                             </button>
-                            <h3 class="font-bold text-xl text-gray-800 dark:text-white">Order Summary</h3>
+                            <h3 class="font-bold text-xl text-gray-800 dark:text-white lang-summary">Order Summary</h3>
                         </div>
                         
                         <div class="mb-6 bg-gray-50 dark:bg-gray-700/30 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
@@ -448,20 +462,20 @@
                             </div>
                         </div>
                         
-                        <button onclick="proceedToPayment()" class="w-full bg-green-600 text-white py-3 rounded-lg font-bold text-lg hover:bg-green-700 shadow-lg mt-6 transition">Continue to Payment</button>
+                        <button onclick="proceedToPayment()" class="w-full bg-green-600 text-white py-3 rounded-lg font-bold text-lg hover:bg-green-700 shadow-lg mt-6 transition lang-pay-btn">Continue to Payment</button>
                     </div>
                 </div>
 
                 <div id="view-orders" class="hidden space-y-6">
                     <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 md:p-6 transition-colors">
-                        <h3 class="font-bold text-lg mb-6 text-gray-800 dark:text-white">Order History</h3>
+                        <h3 class="font-bold text-lg mb-6 text-gray-800 dark:text-white lang-orders">Order History</h3>
                         <div class="space-y-4" id="orders-list-full"></div>
                     </div>
                 </div>
 
                 <div id="view-wishlist" class="hidden space-y-6">
                      <div class="flex justify-between items-center mb-4">
-                        <h3 class="font-bold text-xl text-gray-800 dark:text-white">My Wishlist</h3>
+                        <h3 class="font-bold text-xl text-gray-800 dark:text-white lang-wishlist">My Wishlist</h3>
                      </div>
                      <div id="wishlist-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
                 </div>
@@ -469,12 +483,22 @@
                 <div id="view-addresses" class="hidden space-y-6">
                     <div class="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm transition-colors">
                         <div class="flex justify-between items-center mb-4">
-                            <h3 class="font-bold text-lg text-gray-800 dark:text-white">Saved Addresses</h3>
+                            <h3 class="font-bold text-lg text-gray-800 dark:text-white lang-addresses">Saved Addresses</h3>
                             <button onclick="openAddressModal()" class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition">
                                 <i data-lucide="plus" class="w-4 h-4 inline mr-1"></i> Add New
                             </button>
                         </div>
                         <div id="addresses-container" class="space-y-4"></div>
+                    </div>
+                </div>
+
+                <div id="view-about" class="hidden space-y-6">
+                    <div class="bg-white dark:bg-gray-800 p-8 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm text-center transition-colors">
+                        <div class="w-20 h-20 bg-green-600 rounded-2xl flex items-center justify-center text-white text-4xl font-bold mx-auto mb-6 shadow-lg">L</div>
+                        <h2 class="text-3xl font-bold text-gray-800 dark:text-white mb-4 lang-about-title">About LivestockMart</h2>
+                        <p class="text-gray-600 dark:text-gray-400 leading-relaxed max-w-2xl mx-auto lang-about-desc">
+                            India's most trusted digital marketplace for high-quality goats and sheep. We connect breeders directly with buyers, ensuring transparency, fair pricing, and healthy livestock delivery.
+                        </p>
                     </div>
                 </div>
 
@@ -541,7 +565,69 @@
         let pendingCheckoutItems = null;
         let editingAddressIndex = -1;
         let autoRefreshInterval = null; 
+        let proofUploaded = false; 
         
+        // --- Language & Notifications ---
+        let currentLang = localStorage.getItem('lm_lang') || 'en';
+        const notifSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3');
+
+        const translations = {
+            en: {
+                dashboard: "My Dashboard", browse: "Browse Livestock", cart: "Shopping Cart", orders: "My Orders",
+                wishlist: "Wishlist", addresses: "Addresses", support: "Support", about: "About",
+                checkout: "Proceed to Checkout", summary: "Order Summary", pay_btn: "Continue to Payment", reupload: "Re-upload Proof",
+                goat: "Goat", sheep: "Sheep", breed: "Breed", weight: "Weight", buy: "Buy Now", add_cart: "Add to Cart", sold: "Sold Out",
+                about_title: "About LivestockMart", about_desc: "India's most trusted digital marketplace for high-quality goats and sheep. We connect breeders directly with buyers, ensuring transparency, fair pricing, and healthy livestock delivery.",
+                recent_orders: "Recent Orders"
+            },
+            te: {
+                dashboard: "నా డాష్‌బోర్డ్", browse: "పశువులను చూడండి", cart: "షాపింగ్ కార్ట్", orders: "నా ఆర్డర్లు",
+                wishlist: "కోరికల జాబితా", addresses: "చిరునామాలు", support: "మద్దతు", about: "గురించి",
+                checkout: "చెక్‌అవుట్ చేయండి", summary: "ఆర్డర్ వివరాలు", pay_btn: "చెల్లింపు కొనసాగించండి", reupload: "మళ్లీ ప్రూఫ్ అప్‌లోడ్ చేయండి",
+                goat: "మేక", sheep: "గొర్రె", breed: "జాతి", weight: "బరువు", buy: "వెంటనే కొనండి", add_cart: "కార్ట్ లో చేర్చండి", sold: "అమ్మబడింది",
+                about_title: "లైవ్‌స్టాక్ మార్ట్ గురించి", about_desc: "నమ్మకంతో పెంపకందారులను మరియు కొనుగోలుదారులను కలిపే భారతదేశపు ప్రముఖ డిజిటల్ పశువుల మార్కెట్. మేము నాణ్యమైన పశువులను మరియు సురక్షితమైన డెలివరీని అందిస్తాము.",
+                recent_orders: "ఇటీవలి ఆర్డర్లు"
+            }
+        };
+
+        function changeLanguage(lang) {
+            currentLang = lang;
+            localStorage.setItem('lm_lang', lang);
+            document.getElementById('lang-menu').classList.add('hidden');
+            applyTranslations();
+            // Re-render views that have translated content
+            if(!document.getElementById('view-browse').classList.contains('hidden')) renderBrowse();
+            if(!document.getElementById('view-orders').classList.contains('hidden')) renderOrders();
+            if(!document.getElementById('view-about').classList.contains('hidden')) document.getElementById('view-about').classList.remove('hidden'); // Refresh text
+            showToast(lang === 'te' ? 'భాష మార్చబడింది' : 'Language changed', 'success');
+        }
+
+        function applyTranslations() {
+            const t = translations[currentLang];
+            document.querySelectorAll('.lang-dashboard').forEach(e => e.innerText = t.dashboard);
+            document.querySelectorAll('.lang-browse').forEach(e => e.innerText = t.browse);
+            document.querySelectorAll('.lang-cart').forEach(e => e.innerText = t.cart);
+            document.querySelectorAll('.lang-orders').forEach(e => e.innerText = t.orders);
+            document.querySelectorAll('.lang-wishlist').forEach(e => e.innerText = t.wishlist);
+            document.querySelectorAll('.lang-addresses').forEach(e => e.innerText = t.addresses);
+            document.querySelectorAll('.lang-support').forEach(e => e.innerText = t.support);
+            document.querySelectorAll('.lang-about').forEach(e => e.innerText = t.about);
+            document.querySelectorAll('.lang-checkout').forEach(e => e.innerText = t.checkout);
+            document.querySelectorAll('.lang-summary').forEach(e => e.innerText = t.summary);
+            document.querySelectorAll('.lang-pay-btn').forEach(e => e.innerText = t.pay_btn);
+            document.querySelectorAll('.lang-about-title').forEach(e => e.innerText = t.about_title);
+            document.querySelectorAll('.lang-about-desc').forEach(e => e.innerText = t.about_desc);
+            document.querySelectorAll('.lang-recent-orders').forEach(e => e.innerText = t.recent_orders);
+            
+            // Update page title based on active view
+            const activeNav = document.querySelector('.nav-item.bg-green-600');
+            if(activeNav) {
+                const viewKey = activeNav.getAttribute('onclick').match(/'([^']+)'/)[1];
+                document.getElementById('page-title').innerText = t[viewKey] || (viewKey.charAt(0).toUpperCase() + viewKey.slice(1));
+            }
+        }
+
+        // --- Theme & Layout ---
         function initTheme() {
             if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
                 document.documentElement.classList.add('dark');
@@ -556,16 +642,12 @@
             localStorage.theme = isDark ? 'dark' : 'light';
             updateToggleUI();
             
+            // Re-render active view to update dynamic classes
             const activeNav = document.querySelector('.nav-item.bg-green-600');
             if (activeNav) {
                 const onclick = activeNav.getAttribute('onclick') || "";
                 const currentView = onclick.replace("router('", "").replace("')", "") || 'dashboard';
-                if(currentView === 'browse') renderBrowse();
-                else if(currentView === 'cart') renderCart();
-                else if(currentView === 'orders') renderOrders();
-                else if(currentView === 'wishlist') renderWishlist();
-                else if(currentView === 'addresses') renderAddresses();
-                else if(currentView === 'dashboard') renderDashboard();
+                router(currentView); // Simple re-render
             }
         }
         
@@ -585,7 +667,6 @@
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
             const overlay = document.getElementById('mobile-overlay');
-            
             if (sidebar.classList.contains('-translate-x-full')) {
                 sidebar.classList.remove('-translate-x-full');
                 overlay.classList.remove('hidden');
@@ -623,9 +704,7 @@
                     <i data-lucide="${icon}" class="w-4 h-4"></i>
                 </div>
                 <div class="flex-1">${message}</div>
-                <button onclick="document.getElementById('${id}')?.remove()" class="ml-2 text-xs opacity-80 hover:opacity-100">
-                    ✕
-                </button>
+                <button onclick="document.getElementById('${id}')?.remove()" class="ml-2 text-xs opacity-80 hover:opacity-100">✕</button>
             `;
             container.appendChild(div);
             lucide.createIcons();
@@ -644,9 +723,7 @@
             return wishlist.filter(id => livestock.some(item => item._id === id)).length;
         }
         
-        async function saveNotifications() {
-            await saveUserState();
-        }
+        async function saveNotifications() { await saveUserState(); }
 
         async function markNotificationsAsSeen() {
             notifications.forEach(n => n.seen = true);
@@ -660,18 +737,13 @@
             if (!badge) return;
             const unseenCount = notifications.filter(n => !n.seen).length;
             badge.innerText = unseenCount;
-            if (unseenCount > 0) {
-                badge.classList.remove('hidden');
-            } else {
-                badge.classList.add('hidden');
-            }
+            if (unseenCount > 0) badge.classList.remove('hidden'); else badge.classList.add('hidden');
             if (clearBtn) clearBtn.disabled = notifications.length === 0;
         }
 
         function renderNotifications() {
             const list = document.getElementById('notification-list');
             if (!list) return;
-
             if (notifications.length === 0) {
                 list.innerHTML = `<p class="text-center text-xs text-gray-400 py-4" id="no-notifications-msg">No new notifications.</p>`;
             } else {
@@ -686,9 +758,7 @@
                                 <p class="text-[11px] text-gray-500 dark:text-gray-400">${n.message}</p>
                             </div>
                         </div>
-                        <button onclick="removeNotification('${n.id}')" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 ml-2 p-1 -mt-1">
-                            <i data-lucide="x" class="w-3 h-3"></i>
-                        </button>
+                        <button onclick="removeNotification('${n.id}')" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 ml-2 p-1 -mt-1"><i data-lucide="x" class="w-3 h-3"></i></button>
                     </div>
                 `}).join('');
             }
@@ -700,7 +770,6 @@
             const menu = document.getElementById('notification-menu');
             if (!menu) return;
             const isHidden = menu.classList.contains('hidden');
-
             if (typeof force === 'boolean') {
                 if (force) {
                     renderNotifications();
@@ -714,7 +783,6 @@
                 }
                 return;
             }
-
             if (isHidden) {
                 renderNotifications();
                 menu.classList.remove('hidden', 'scale-95', 'opacity-0');
@@ -743,46 +811,30 @@
         async function loadUserState() {
             if (!currentUser || !currentUser.id) return;
             try {
-                const response = await fetch(`${API_URL}/user/state?_=${Date.now()}`, {
-                    method: 'GET',
-                    credentials: 'include'
-                });
+                const response = await fetch(`${API_URL}/user/state?_=${Date.now()}`, { method: 'GET', credentials: 'include' });
                 if (response.ok) {
                     const data = await response.json(); 
                     cart = data.cart || [];
                     wishlist = data.wishlist || []; 
                     addresses = data.addresses || [];
                     notifications = data.notifications || []; 
-                    
-                    if (addresses.length > 0 && !currentAddress) {
-                        currentAddress = addresses[0];
-                    }
+                    if (addresses.length > 0 && !currentAddress) currentAddress = addresses[0];
                 } else {
-                    cart = [];
-                    wishlist = [];
-                    addresses = [];
-                    notifications = [];
-                    currentAddress = null;
+                    cart = []; wishlist = []; addresses = []; notifications = []; currentAddress = null;
                 }
-            } catch (e) {
-                console.error('Error loading user state:', e);
-            }
+            } catch (e) { console.error('Error loading user state:', e); }
         }
+        
         async function saveUserState() {
             if (!currentUser || !currentUser.id) return;
             try {
-                const response = await fetch(`${API_URL}/user/state`, {
+                await fetch(`${API_URL}/user/state`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
                     body: JSON.stringify({ cart, wishlist, addresses, notifications }) 
                 });
-                if (!response.ok) {
-                    console.error('Failed to save user state');
-                }
-            } catch (e) {
-                console.error('Error saving user state:', e);
-            }
+            } catch (e) { console.error('Error saving user state:', e); }
         }
 
         function switchAuthView(mode) {
@@ -827,12 +879,7 @@
         }
         function getInitials(name) {
             if (!name) return 'U';
-            return name
-                .split(' ')
-                .filter(Boolean)
-                .map(n => n[0].toUpperCase())
-                .join('')
-                .slice(0, 2);
+            return name.split(' ').filter(Boolean).map(n => n[0].toUpperCase()).join('').slice(0, 2);
         }
         function updateProfileUI() {
             const avatar = document.getElementById('profile-avatar');
@@ -863,10 +910,8 @@
             showAuthError('');
             const email = document.getElementById('login-email').value.trim();
             const password = document.getElementById('login-password').value.trim();
-            if (!email || !password) {
-                showAuthError('Please enter email and password.');
-                return;
-            }
+            if (!email || !password) return showAuthError('Please enter email and password.');
+            
             try {
                 const res = await fetch(`${API_URL}/auth/login`, {
                     method: 'POST',
@@ -875,10 +920,8 @@
                     body: JSON.stringify({ email, password })
                 });
                 const data = await res.json();
-                if (!res.ok) {
-                    showAuthError(data.message || 'Login failed.');
-                    return;
-                }
+                if (!res.ok) return showAuthError(data.message || 'Login failed.');
+                
                 currentUser = data.user;
                 await loadUserState();
                 updateProfileUI();
@@ -898,10 +941,8 @@
             const name = document.getElementById('register-name').value.trim();
             const email = document.getElementById('register-email').value.trim();
             const password = document.getElementById('register-password').value.trim();
-            if (!name || !email || !password) {
-                showAuthError('All fields are required to register.');
-                return;
-            }
+            if (!name || !email || !password) return showAuthError('All fields are required.');
+            
             try {
                 const res = await fetch(`${API_URL}/auth/register`, {
                     method: 'POST',
@@ -910,10 +951,8 @@
                     body: JSON.stringify({ name, email, password })
                 });
                 const data = await res.json();
-                if (!res.ok) {
-                    showAuthError(data.message || 'Registration failed.');
-                    return;
-                }
+                if (!res.ok) return showAuthError(data.message || 'Registration failed.');
+                
                 currentUser = data.user;
                 await loadUserState();
                 updateProfileUI();
@@ -928,67 +967,36 @@
             }
         }
         async function handleLogout() {
-            try {
-                await fetch(`${API_URL}/auth/logout`, {
-                    method: 'POST',
-                    credentials: 'include'
-                });
-            } catch (err) {
-                console.error('Logout error', err);
-            }
-            currentUser = null;
-            cart = [];
-            wishlist = [];
-            addresses = [];
-            currentAddress = null;
-            notifications = [];
-            
+            try { await fetch(`${API_URL}/auth/logout`, { method: 'POST', credentials: 'include' }); } catch (err) {}
+            currentUser = null; cart = []; wishlist = []; addresses = []; currentAddress = null; notifications = [];
             ['login-email', 'login-password', 'register-name', 'register-email', 'register-password'].forEach(id => {
-                const el = document.getElementById(id);
-                if(el) el.value = '';
+                const el = document.getElementById(id); if(el) el.value = '';
             });
-            
             localStorage.removeItem('lm_prev_ls_count');
             localStorage.removeItem('lm_prev_orders_snap');
-            
             if (autoRefreshInterval) clearInterval(autoRefreshInterval);
-
-            updateCartBadge();
-            updateWishlistBadge(); 
-            updateNotificationBadge(); 
-            toggleProfileMenu(false);
+            updateCartBadge(); updateWishlistBadge(); updateNotificationBadge(); toggleProfileMenu(false);
             showToast('Logged out', 'info');
             switchAuthView('login'); 
             showAuthScreen();
         }
         async function checkAuth() {
             try {
-                const res = await fetch(`${API_URL}/auth/me?_=${Date.now()}`, { 
-                    method: 'GET',
-                    credentials: 'include'
-                });
+                const res = await fetch(`${API_URL}/auth/me?_=${Date.now()}`, { method: 'GET', credentials: 'include' });
                 if (res.ok) {
                     const data = await res.json();
                     currentUser = data.user;
                     await loadUserState(); 
                     updateProfileUI();
                     showApp();
-                } else {
-                    showAuthScreen();
-                }
-            } catch (err) {
-                console.error('Auth check error', err);
-                showAuthScreen();
-            }
+                } else showAuthScreen();
+            } catch (err) { showAuthScreen(); }
         }
         async function loadData() {
-            if (currentUser) {
-                await loadUserState();
-            }
+            if (currentUser) await loadUserState();
 
             let fetchedOrders = orders;
             let fetchedLivestock = livestock;
-            
             const isBaselineInitialized = previousLivestockCount > 0 || JSON.parse(previousOrdersSnapshot).length > 0;
             
             try {
@@ -1000,11 +1008,18 @@
                      const notifRes = await fetch(`${API_URL}/notifications?_=${Date.now()}`);
                      if (notifRes.ok) {
                          const fetchedNotifs = await notifRes.json();
+                         let newNotifFound = false;
                          fetchedNotifs.forEach(fn => {
                              if(!notifications.some(n => n.id === fn.id)) {
                                  notifications.push(fn);
+                                 newNotifFound = true;
                              }
                          });
+                         if(newNotifFound) {
+                             notifSound.play().catch(()=>{});
+                             const last = notifications[notifications.length-1];
+                             showToast(last.message, last.color === 'red' ? 'error' : 'info');
+                         }
                      }
                 } catch(e) { }
 
@@ -1022,17 +1037,11 @@
                 }
                 
                 if (currentUser) {
-                    const ordRes = await fetch(`${API_URL}/orders?_=${Date.now()}`, {
-                        method: 'GET',
-                        credentials: 'include'
-                    });
+                    const ordRes = await fetch(`${API_URL}/orders?_=${Date.now()}`, { method: 'GET', credentials: 'include' });
                     fetchedOrders = await ordRes.json();
                     fetchedOrders.sort((a,b) => (a._id < b._id) ? 1 : -1); 
 
-                    const previousOrderMap = JSON.parse(previousOrdersSnapshot).reduce((acc, o) => {
-                        acc[o._id] = o.status;
-                        return acc;
-                    }, {});
+                    const previousOrderMap = JSON.parse(previousOrdersSnapshot).reduce((acc, o) => { acc[o._id] = o.status; return acc; }, {});
 
                     if (isBaselineInitialized) {
                         fetchedOrders.forEach(newOrder => {
@@ -1051,9 +1060,7 @@
                         });
                     }
                 }
-            } catch (e) {
-                console.error("API Error during loadData", e);
-            }
+            } catch (e) { console.error("API Error during loadData", e); }
             
             const livestockChanged = JSON.stringify(livestock) !== JSON.stringify(fetchedLivestock);
             const ordersChanged = JSON.stringify(orders) !== JSON.stringify(fetchedOrders);
@@ -1101,9 +1108,7 @@
 
         function router(viewName) {
             const searchInput = document.getElementById('search-input');
-            if (searchInput) {
-                searchInput.value = ''; 
-            }
+            if (searchInput) searchInput.value = '';
             
             currentCategory = 'All';
             document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -1118,21 +1123,16 @@
 
             loadData();
             
-            const titles = {
-                'dashboard': 'My Dashboard', 'browse': 'Browse Livestock', 'cart': 'Shopping Cart',
-                'orders': 'My Orders', 'wishlist': 'My Wishlist', 'addresses': 'Addresses',
-                'profile': 'My Profile', 'support': 'Support', 'summary': 'Order Summary'
-            };
-            document.getElementById('page-title').innerText = titles[viewName] || 'Dashboard';
-            
-            const views = ['dashboard', 'browse', 'cart', 'orders', 'wishlist', 'addresses', 'profile', 'support', 'summary'];
-            views.forEach(v => document.getElementById(`view-${v}`)?.classList.add('hidden'));
+            // Handle view switching
+            ['dashboard', 'browse', 'cart', 'orders', 'wishlist', 'addresses', 'profile', 'support', 'summary', 'about'].forEach(v => {
+                document.getElementById(`view-${v}`)?.classList.add('hidden');
+            });
             const activeView = document.getElementById(`view-${viewName}`);
             if (activeView) activeView.classList.remove('hidden');
             
+            // Sidebar Active State
             document.querySelectorAll('.nav-item').forEach(btn => {
                 if (viewName === 'summary') return; 
-                
                 if (btn.getAttribute('onclick').includes(viewName)) {
                     btn.classList.add('bg-green-600', 'text-white');
                     btn.classList.remove('text-gray-600', 'hover:bg-gray-100', 'dark:text-gray-300', 'dark:hover:bg-gray-700');
@@ -1141,6 +1141,8 @@
                     btn.classList.add('text-gray-600', 'hover:bg-gray-100', 'dark:text-gray-300', 'dark:hover:bg-gray-700');
                 }
             });
+
+            applyTranslations(); // Update title and dynamic text
 
             const sidebar = document.getElementById('sidebar');
             const overlay = document.getElementById('mobile-overlay');
@@ -1156,14 +1158,11 @@
             if (viewName === 'wishlist') renderWishlist();
             if (viewName === 'addresses') renderAddresses();
             
-            updateCartBadge(); 
-            updateWishlistBadge(); 
-            updateNotificationBadge(); 
-
+            updateCartBadge(); updateWishlistBadge(); updateNotificationBadge(); 
             lucide.createIcons();
         }
 
-        // --- RENDER FUNCTIONS (Updated with Dark Mode Support) ---
+        // --- RENDER FUNCTIONS ---
         function renderDashboard() {
             const totalSpent = orders.reduce((sum, order) => sum + (order.total || 0), 0);
             document.getElementById('dash-total-spent').innerText = formatINR(totalSpent);
@@ -1213,6 +1212,7 @@
             
             const searchTerm = searchInput.value.toLowerCase().trim();
             const grid = document.getElementById('livestock-grid');
+            const t = translations[currentLang];
             
             const filtered = livestock.filter(item => {
                 const name = (item.name || '').toLowerCase();
@@ -1222,7 +1222,6 @@
                 const itemType = (item.type || '').toLowerCase();
                 const selectedCat = currentCategory.toLowerCase();
                 const matchCat = currentCategory === 'All' || itemType === selectedCat || itemType.startsWith(selectedCat); 
-                
                 return matchSearch && matchCat;
             });
             
@@ -1236,23 +1235,18 @@
                 const imageUrl = `${API_URL}/livestock/image/${item._id}`;
                 const isSold = item.status === 'Sold';
                 
-                // --- NEW: Sold UI Logic ---
-                // If sold:
-                // 1. Show "Out of Stock" overlay
-                // 2. Disable "Buy Now" and "Add to Cart" buttons
-                
                 const buttons = isSold 
                     ? `<button disabled class="w-full bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed px-3 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2">
-                        <i data-lucide="slash" class="w-4 h-4"></i> Sold Out
+                        <i data-lucide="slash" class="w-4 h-4"></i> ${t.sold}
                        </button>`
                     : `<div class="flex gap-2 w-full">
-                            <button onclick="buyNow('${item._id}')" class="flex-1 bg-green-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-green-700 transition">Buy Now</button>
-                            <button onclick="addToCart('${item._id}')" class="flex-1 bg-gray-900 dark:bg-gray-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-gray-800 dark:hover:bg-gray-500 transition">Add to Cart</button>
+                            <button onclick="buyNow('${item._id}')" class="flex-1 bg-green-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-green-700 transition">${t.buy}</button>
+                            <button onclick="addToCart('${item._id}')" class="flex-1 bg-gray-900 dark:bg-gray-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-gray-800 dark:hover:bg-gray-500 transition">${t.add_cart}</button>
                        </div>`;
 
                 const soldOverlay = isSold ? 
                     `<div class="absolute inset-0 bg-black/50 z-10 flex items-center justify-center rounded-lg">
-                        <span class="bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full transform -rotate-12 border-2 border-white shadow-lg">OUT OF STOCK</span>
+                        <span class="bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full transform -rotate-12 border-2 border-white shadow-lg">${t.sold}</span>
                      </div>` : '';
 
                 return `
@@ -1268,9 +1262,8 @@
                         <div class="truncate pr-2 w-full">
                             <h3 class="font-bold text-lg text-gray-800 dark:text-white truncate">${item.name}</h3>
                             <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                Type: ${item.type || 'N/A'}<br>
-                                Breed: ${item.breed || 'N/A'}<br>
-                                Weight: ${item.weight ? item.weight + ' kg' : 'N/A'}
+                                ${item.type === 'Goat' ? t.goat : t.sheep} • ${t.breed}: ${item.breed}<br>
+                                ${t.weight}: ${item.weight ? item.weight + ' kg' : 'N/A'}
                             </p>
                         </div>
                         <span class="bg-gray-800 dark:bg-gray-700 text-white text-xs px-2 py-1 rounded flex-shrink-0 ml-1">${item.tags?.[0] || 'Good'}</span>
@@ -1299,6 +1292,8 @@
             let total = 0;
             const selectedItems = cart.filter(item => item.selected !== false);
             total = selectedItems.reduce((sum, item) => sum + (item.price || 0), 0);
+            const t = translations[currentLang];
+            
             container.innerHTML = cart.map((item, index) => {
                 const isSelected = item.selected !== false;
                 const imageUrl = `${API_URL}/livestock/image/${item._id}`;
@@ -1312,8 +1307,8 @@
                         <div class="overflow-hidden">
                             <h4 class="font-bold text-gray-800 dark:text-white truncate">${item.name}</h4>
                             <div class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                                <p>Type: ${item.type || 'N/A'}</p> <p>Breed: ${item.breed}</p>
-                                <p>Weight: ${item.weight ? item.weight + ' kg' : 'N/A'}</p>
+                                <p>${item.type === 'Goat' ? t.goat : t.sheep} • ${t.breed}: ${item.breed}</p>
+                                <p>${t.weight}: ${item.weight ? item.weight + ' kg' : 'N/A'}</p>
                             </div>
                         </div>
                     </div>
@@ -1337,23 +1332,21 @@
                 container.innerHTML = `<div class="text-center text-gray-500 dark:text-gray-400">No past orders.</div>`;
                 return;
             }
+            const t = translations[currentLang];
             container.innerHTML = orders.map(o => {
                 const itemsHtml = o.items.map(i => {
                     const fullItem = livestock.find(l => l._id === i._id || l.id === i._id);
                     const weight = i.weight || (fullItem ? fullItem.weight : 'N/A');
-                    const type = i.type || (fullItem ? fullItem.type : 'N/A'); 
                     const imageUrl = `${API_URL}/livestock/image/${i._id}`;
                     return `
                         <div class="flex gap-4 mb-4 border-b border-gray-100 dark:border-gray-600 last:border-0 pb-4 last:pb-0">
                             <div class="w-20 h-20 bg-gray-100 dark:bg-gray-700 rounded-lg flex-shrink-0 overflow-hidden border border-gray-200 dark:border-gray-600">
-                                <img src="${imageUrl}" class="w-full h-full object-cover"
-                                    onerror="this.onerror=null; this.src='https://via.placeholder.com/80?text=Img'">
+                                <img src="${imageUrl}" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='https://via.placeholder.com/80?text=Img'">
                             </div>
                             <div class="flex-1">
                                 <p class="font-bold text-gray-800 dark:text-white">${i.name}</p>
-                                <p class="text-sm text-gray-600 dark:text-gray-400">Type: ${type}</p>
-                                <p class="text-sm text-gray-600 dark:text-gray-400">Breed: ${i.breed || 'N/A'}</p>
-                                <p class="text-sm text-gray-600 dark:text-gray-400">Weight: ${weight !== 'N/A' ? weight + ' kg' : 'N/A'}</p>
+                                <p class="text-sm text-gray-600 dark:text-gray-400">${t.breed}: ${i.breed || 'N/A'}</p>
+                                <p class="text-sm text-gray-600 dark:text-gray-400">${t.weight}: ${weight !== 'N/A' ? weight + ' kg' : 'N/A'}</p>
                                 <p class="text-sm font-semibold text-green-700 dark:text-green-400 mt-1">${formatINR(i.price)}</p>
                             </div>
                         </div>
@@ -1361,18 +1354,11 @@
                 }).join('');
                 
                 const addressHtml = o.address ? `<div><strong>Ship to:</strong> ${o.address.name}, +91 ${o.address.phone}</div>
-                    <div>${o.address.line || o.address.line1}${o.address.line2 ? '<br>' + o.address.line2 : ''}</div>
+                    <div>${o.address.line1 || o.address.line}${o.address.line2 ? '<br>' + o.address.line2 : ''}</div>
                     <div>${o.address.city}, ${o.address.state} - ${o.address.pincode}</div>` : '';
                 
-                const trackBtn = o.status !== 'Cancelled' ? `<button onclick="openTrackModal('${o._id}')"
-                    class="flex-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-3 py-2 rounded-lg text-sm hover:bg-blue-200 dark:hover:bg-blue-800/40 transition">
-                    Track Order
-                </button>` : '';
-
-                const cancelBtn = o.status === 'Processing' ? `<button onclick="cancelOrder('${o._id}')"
-                    class="flex-1 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 px-3 py-2 rounded-lg text-sm hover:bg-red-200 dark:hover:bg-red-800/40 transition">
-                    Cancel Order
-                </button>` : '';
+                const trackBtn = o.status !== 'Cancelled' ? `<button onclick="openTrackModal('${o._id}')" class="flex-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-3 py-2 rounded-lg text-sm hover:bg-blue-200 dark:hover:bg-blue-800/40 transition">Track Order</button>` : '';
+                const cancelBtn = o.status === 'Processing' ? `<button onclick="cancelOrder('${o._id}')" class="flex-1 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 px-3 py-2 rounded-lg text-sm hover:bg-red-200 dark:hover:bg-red-800/40 transition">Cancel Order</button>` : '';
                 
                 return `
                     <div class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 mb-4 transition-colors">
@@ -1383,12 +1369,16 @@
                             </div>
                             <div class="text-left sm:text-right">
                                 <p class="font-bold text-green-700 dark:text-green-400">Total: ${formatINR(o.total)}</p>
-                                <span class="${getStatusColor(o.status)} text-xs px-2 py-1 rounded-full font-medium inline-block mt-1">
-                                ${o.status}
-                                </span>
+                                <span class="${getStatusColor(o.status)} text-xs px-2 py-1 rounded-full font-medium inline-block mt-1">${o.status}</span>
                             </div>
                         </div>
                         ${itemsHtml}
+                        ${o.status === 'Payment Rejected' ? `
+                            <div class="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg border border-red-200 dark:border-red-800 mb-3">
+                                <p class="text-xs text-red-600 dark:text-red-400 font-bold mb-1">REASON: ${o.rejectionReason}</p>
+                                <button onclick="openReuploadUI('${o._id}', ${o.total})" class="w-full bg-red-600 text-white py-2 rounded-lg text-xs font-bold shadow">${t.reupload}</button>
+                            </div>
+                        ` : ''}
                         <div class="text-sm text-gray-600 dark:text-gray-300 mb-4 border-t dark:border-gray-600 pt-3">
                             ${addressHtml}
                         </div>
@@ -1408,20 +1398,21 @@
                 grid.innerHTML = '<div class="col-span-full text-center text-gray-500 dark:text-gray-400 py-10">Your wishlist is empty.</div>';
                 return;
             }
+            const t = translations[currentLang];
             grid.innerHTML = items.map(item => {
                 const imageUrl = `${API_URL}/livestock/image/${item._id}`;
                 const isSold = item.status === 'Sold';
                 const buttons = isSold 
                     ? `<button disabled class="w-full bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed px-3 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2">
-                        <i data-lucide="slash" class="w-4 h-4"></i> Sold Out
+                        <i data-lucide="slash" class="w-4 h-4"></i> ${t.sold}
                        </button>`
                     : `<div class="flex gap-2 w-full">
-                            <button onclick="buyNow('${item._id}')" class="flex-1 bg-green-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-green-700 transition">Buy Now</button>
-                            <button onclick="addToCart('${item._id}')" class="flex-1 bg-gray-900 dark:bg-gray-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-gray-800 dark:hover:bg-gray-500 transition">Add to Cart</button>
+                            <button onclick="buyNow('${item._id}')" class="flex-1 bg-green-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-green-700 transition">${t.buy}</button>
+                            <button onclick="addToCart('${item._id}')" class="flex-1 bg-gray-900 dark:bg-gray-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-gray-800 dark:hover:bg-gray-500 transition">${t.add_cart}</button>
                        </div>`;
                  const soldOverlay = isSold ? 
                     `<div class="absolute inset-0 bg-black/50 z-10 flex items-center justify-center rounded-lg">
-                        <span class="bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full transform -rotate-12 border-2 border-white shadow-lg">OUT OF STOCK</span>
+                        <span class="bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full transform -rotate-12 border-2 border-white shadow-lg">${t.sold}</span>
                      </div>` : '';
 
                 return `
@@ -1437,8 +1428,8 @@
                          <div class="truncate pr-2">
                              <h3 class="font-bold text-lg text-gray-800 dark:text-white truncate">${item.name}</h3>
                              <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                <p>Type: ${item.type || 'N/A'}</p> <p>Breed: ${item.breed}</p>
-                                <p>Weight: ${item.weight ? item.weight + ' kg' : 'N/A'}</p>
+                                <p>${item.type === 'Goat' ? t.goat : t.sheep} • ${t.breed}: ${item.breed}</p>
+                                <p>${t.weight}: ${item.weight ? item.weight + ' kg' : 'N/A'}</p>
                              </div>
                          </div>
                     </div>
@@ -1633,7 +1624,7 @@
             const addressData = { 
                 name, 
                 phone, 
-                line1: line, 
+                line1: line, // Ensured line1 to match backend schema
                 city, 
                 state, 
                 pincode,
@@ -1649,7 +1640,7 @@
             if (!currentAddress || editingAddressIndex === 0) {
                 currentAddress = addresses[0];
             }
-            await saveUserState(); 
+            await saveUserState(); // Saving to DB
             renderAddresses();
             closeAddressModal();
             if (pendingCheckoutItems && pendingCheckoutItems.length > 0) {
@@ -1955,13 +1946,15 @@
         });
         
         function showPaymentUI(upiString, paymentId, itemsToBuy, total) {
+            proofUploaded = false; // Reset on new payment
             document.querySelectorAll('.lm-pay-popup').forEach(e => e.remove());
             const payBox = document.createElement("div");
             payBox.className = "lm-pay-popup fixed inset-0 flex items-center justify-center bg-black/60 z-50 px-4 backdrop-blur-sm";
             payBox.innerHTML = `
-                <div class="bg-white dark:bg-gray-800 w-full max-w-md p-6 rounded-2xl text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-gray-700">
+                <div class="bg-white dark:bg-gray-800 w-full max-w-md p-6 rounded-2xl text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-gray-700 max-h-[90vh] overflow-y-auto">
                     <h2 class="text-xl font-bold mb-3">Complete Payment</h2>
-                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">Choose your preferred UPI app.</p>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Scan QR code or use UPI apps.</p>
+                    
                     <div class="grid grid-cols-2 gap-4 mb-6">
                         <a href="${upiString}" class="pay-icon-btn flex flex-col items-center justify-center p-4 border dark:border-gray-600 rounded-xl hover:bg-purple-50 dark:hover:bg-purple-900/20 transition bg-white dark:bg-gray-700">
                             <img src="https://uxwing.com/wp-content/themes/uxwing/download/brands-and-social-media/phonepe-icon.png" alt="PhonePe" class="w-12 h-12 mb-2 object-contain">
@@ -1976,25 +1969,68 @@
                             <img src="https://uxwing.com/wp-content/themes/uxwing/download/brands-and-social-media/bhim-upi-icon.png" alt="BHIM" class="w-12 h-12 mb-2 object-contain" onerror="this.src='https://placehold.co/100x100/orange/white?text=BHIM'">
                         </a>
                     </div>
-                    <div class="mt-4 text-center">
+
+                    <div class="mt-4 text-center border-b dark:border-gray-700 pb-4 mb-4">
                         <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(upiString)}" class="mx-auto rounded-lg border dark:border-gray-600 shadow-sm"/>
                         <p class="text-xs text-gray-500 dark:text-gray-400 mt-3 font-semibold">Scan & Pay • Amount: ₹${total}</p>
                     </div>
-                    <button id="lm-paid-btn" class="w-full bg-green-600 text-white py-3 mt-6 rounded-xl font-bold text-lg shadow-lg hover:bg-green-700 transition transform active:scale-95">
+
+                    <div class="space-y-3">
+                        <p class="text-sm font-medium text-gray-700 dark:text-gray-300">Upload Payment Screenshot</p>
+                        <div id="proof-container" class="relative">
+                            <input type="file" id="payment-proof-input" accept="image/*" class="hidden" onchange="handleProofUpload(this)">
+                            <button onclick="document.getElementById('payment-proof-input').click()" class="w-full flex items-center justify-center gap-2 border-2 border-dashed border-gray-300 dark:border-gray-600 py-4 rounded-xl hover:border-emerald-500 transition-colors" id="upload-btn-ui">
+                                <i data-lucide="upload-cloud" class="w-5 h-5 text-gray-400"></i>
+                                <span class="text-sm text-gray-500" id="proof-text">Select Screenshot</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <button id="lm-paid-btn" class="w-full bg-emerald-600 text-white py-3 mt-6 rounded-xl font-bold text-lg shadow-lg hover:bg-emerald-700 transition transform active:scale-95">
                         I Have Paid
                     </button>
                     <button id="lm-cancel-btn" class="w-full text-gray-500 dark:text-gray-400 mt-3 text-sm font-medium hover:text-gray-700 dark:hover:text-gray-200">Cancel Payment</button>
                 </div>
             `;
             document.body.appendChild(payBox);
+            lucide.createIcons();
+
             document.getElementById('lm-paid-btn').onclick = function() {
+                if (!proofUploaded) {
+                    showToast('Please upload screenshot of proof', 'warning');
+                    return;
+                }
                 confirmPayment(paymentId, itemsToBuy, total);
             };
             document.getElementById('lm-cancel-btn').onclick = function() {
                 document.querySelectorAll('.lm-pay-popup').forEach(e => e.remove());
             };
         }
+
+        function handleProofUpload(input) {
+            if (input.files && input.files[0]) {
+                proofUploaded = true;
+                const btnUi = document.getElementById('upload-btn-ui');
+                const textUi = document.getElementById('proof-text');
+                btnUi.classList.add('border-emerald-500', 'bg-emerald-50', 'dark:bg-emerald-900/20');
+                textUi.innerText = "Screenshot Selected: " + input.files[0].name;
+                textUi.classList.remove('text-gray-500');
+                textUi.classList.add('text-emerald-600', 'dark:text-emerald-400');
+                showToast('Proof attached successfully', 'success');
+            }
+        }
+
         async function confirmPayment(paymentId, items, total) {
+            const file = document.getElementById('payment-proof-input').files[0];
+            const fd = new FormData();
+            fd.append('items', JSON.stringify(items.map(i => ({
+                _id: i._id || i.id, name: i.name, price: i.price, breed: i.breed, type: i.type, weight: i.weight
+            }))));
+            fd.append('address', JSON.stringify(currentAddress));
+            fd.append('total', total);
+            fd.append('date', new Date().toLocaleString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }));
+            fd.append('paymentProof', file);
+
             try {
                 const res = await fetch(`${API_URL}/payment/confirm`, {
                     method: 'POST',
@@ -2011,24 +2047,7 @@
                 const ordRes = await fetch(`${API_URL}/orders`, {
                     method: 'POST',
                     credentials: 'include',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        items: items.map(i => ({
-                            _id: i._id || i.id,
-                            name: i.name,
-                            price: i.price,
-                            breed: i.breed,
-                            type: i.type, 
-                            weight: i.weight
-                        })),
-                        total,
-                        date: new Date().toLocaleString('en-IN', {
-                            year: 'numeric', month: 'short', day: 'numeric',
-                            hour: '2-digit', minute: '2-digit'
-                        }),
-                        address: currentAddress,
-                        status: 'Processing'
-                    })
+                    body: fd
                 });
                 if (!ordRes.ok) {
                     const err = await ordRes.json();
@@ -2067,6 +2086,51 @@
             } catch (err) {
                 console.error('cancelOrder error', err);
                 showToast('Cancel failed', 'error');
+            }
+        }
+
+        // --- REUPLOAD LOGIC ---
+        function openReuploadUI(orderId, total) {
+            proofUploaded = false;
+            const popup = document.createElement('div');
+            popup.className = 'lm-pay-popup fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4';
+            popup.innerHTML = `
+                <div class="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl">
+                    <h3 class="font-bold text-xl mb-4 text-center text-red-600">Re-upload Proof</h3>
+                    <p class="text-center text-sm text-gray-500 mb-4">Please upload a clearer screenshot for Order #${orderId.slice(-6)}</p>
+                    <label class="block w-full border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-4 text-center cursor-pointer hover:border-blue-500 transition" id="proof-lbl">
+                        <span class="text-sm text-gray-500">Select New Screenshot</span>
+                        <input type="file" id="reupload-input" class="hidden" accept="image/*" onchange="handleProof(this)">
+                    </label>
+                    <button id="reupload-btn" class="w-full bg-blue-600 text-white py-3 rounded-xl font-bold mt-4">Submit</button>
+                    <button onclick="this.closest('.lm-pay-popup').remove()" class="w-full text-gray-500 text-sm mt-2">Cancel</button>
+                </div>
+            `;
+            document.body.appendChild(popup);
+
+            document.getElementById('reupload-btn').onclick = async () => {
+                const file = document.getElementById('reupload-input').files[0];
+                if(!file) return showToast('Please select a file', 'warning');
+                
+                const fd = new FormData();
+                fd.append('paymentProof', file);
+                
+                const res = await fetch(`${API_URL}/orders/${orderId}/reupload`, { method: 'PUT', body: fd });
+                if(res.ok) {
+                    document.querySelector('.lm-pay-popup').remove();
+                    showToast('Proof Submitted!', 'success');
+                    loadData();
+                }
+            };
+        }
+
+        function handleProof(input) {
+            if(input.files[0]) {
+                proofUploaded = true;
+                const lbl = document.getElementById('proof-lbl');
+                lbl.classList.add('border-blue-500', 'bg-blue-50', 'dark:bg-blue-900/20');
+                lbl.querySelector('span').innerText = "✓ Proof Selected: " + input.files[0].name;
+                lbl.querySelector('span').classList.add('text-blue-600');
             }
         }
     </script>
