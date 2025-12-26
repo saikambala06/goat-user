@@ -13,32 +13,28 @@ const Order = require('./models/Order');
 const User = require('./models/User');
 
 const app = express();
+const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'change-this-secret-key-123';
+
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/livestockmart';
 
-// --- Global MongoDB Connection Cache for Serverless (Vercel Optimization) ---
-let cachedConnection = null;
-
 const connectDB = async () => {
-    if (cachedConnection && cachedConnection.readyState === 1) {
-        return cachedConnection;
-    }
     try {
-        cachedConnection = await mongoose.connect(MONGODB_URI, {
-            serverSelectionTimeoutMS: 10000,
-            socketTimeoutMS: 45000,
+        await mongoose.connect(MONGODB_URI, {
+            serverSelectionTimeoutMS: 5000, 
+            socketTimeoutMS: 45000, 
         });
-        console.log('✅ MongoDB Connected (cached)');
-        return cachedConnection;
+        console.log('✅ Connected to MongoDB');
     } catch (err) {
-        console.error('❌ MongoDB Connection Error:', err);
-        // Do not exit process in serverless; just throw so the request fails cleanly
-        throw err;
+        console.error('❌ Initial MongoDB Connection Error:', err);
     }
 };
 
-// Initialize DB connection immediately
-connectDB().catch(console.error);
+mongoose.connection.on('disconnected', () => console.warn('⚠️ MongoDB disconnected! Attempting reconnect...'));
+mongoose.connection.on('reconnected', () => console.log('✅ MongoDB reconnected'));
+mongoose.connection.on('error', (err) => console.error('❌ MongoDB connection error:', err));
+
+connectDB();
 
 const upload = multer({ 
     storage: multer.memoryStorage(),
@@ -54,13 +50,11 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(express.static('public'));
 
-// --- HEALTH CHECK ---
 app.get('/health', (req, res) => {
     const dbStatus = mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected';
-    res.status(200).json({ status: 'UP', database: dbStatus });
+    res.status(200).json({ status: 'UP', uptime: process.uptime(), database: dbStatus });
 });
 
-// --- HELPER FUNCTIONS ---
 function createToken(user) {
     return jwt.sign({ id: user._id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
 }
@@ -88,7 +82,6 @@ function authMiddleware(req, res, next) {
 
 // --- AUTH ROUTES ---
 app.post('/api/auth/register', async (req, res) => {
-    await connectDB(); // Ensure DB is connected
     try {
         const { name, email, password } = req.body;
         if (!name || !email || !password) return res.status(400).json({ message: 'All fields required' });
@@ -109,7 +102,6 @@ app.post('/api/auth/register', async (req, res) => {
 });
 
 app.post('/api/auth/login', async (req, res) => {
-    await connectDB();
     try {
         const { email, password } = req.body;
         if (!email || !password) return res.status(400).json({ message: 'Credentials required' });
@@ -140,7 +132,6 @@ app.post('/api/auth/logout', (req, res) => {
 
 // --- USER STATE ROUTES ---
 app.get('/api/user/state', authMiddleware, async (req, res) => {
-    await connectDB();
     try {
         const user = await User.findById(req.user.id);
         if (!user) return res.status(404).json({ message: 'User not found' });
@@ -158,7 +149,6 @@ app.get('/api/user/state', authMiddleware, async (req, res) => {
 });
 
 app.put('/api/user/state', authMiddleware, async (req, res) => {
-    await connectDB();
     try {
         const { cart, wishlist, addresses, notifications } = req.body;
         
@@ -178,8 +168,9 @@ app.put('/api/user/state', authMiddleware, async (req, res) => {
 
 // --- LIVESTOCK ROUTES ---
 app.get('/api/livestock', async (req, res) => {
-    await connectDB();
     try {
+        // CHANGED: Fetch ALL items (removed status: 'Available' filter)
+        // This allows the frontend to see 'Sold' items and render them as Out of Stock
         const livestock = await Livestock.find({}, '-image'); 
         res.json(livestock);
     } catch (err) {
@@ -188,10 +179,8 @@ app.get('/api/livestock', async (req, res) => {
 });
 
 app.get('/api/livestock/image/:id', async (req, res) => {
-    await connectDB();
     try {
-        if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).send('Invalid ID');
-        
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(404).send('Invalid ID');
         const livestock = await Livestock.findById(req.params.id, 'image');
         if (!livestock || !livestock.image || !livestock.image.data) return res.status(404).send('Image not found');
         
@@ -204,7 +193,6 @@ app.get('/api/livestock/image/:id', async (req, res) => {
 
 // --- ADMIN ROUTES ---
 app.get('/api/admin/livestock', async (req, res) => {
-    await connectDB();
     try {
         const livestock = await Livestock.find({}).sort({ createdAt: -1 });
         res.json({ livestock });
@@ -214,7 +202,6 @@ app.get('/api/admin/livestock', async (req, res) => {
 });
 
 app.post('/api/admin/livestock', upload.single('image'), async (req, res) => {
-    await connectDB();
     try {
         const { name, type, breed, age, price, tags, status, weight } = req.body;
         if (!name || !type || !price) return res.status(400).json({ message: 'Missing required fields' });
@@ -239,7 +226,6 @@ app.post('/api/admin/livestock', upload.single('image'), async (req, res) => {
 });
 
 app.put('/api/admin/livestock/:id', upload.single('image'), async (req, res) => {
-    await connectDB();
     try {
         if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
         
@@ -256,7 +242,6 @@ app.put('/api/admin/livestock/:id', upload.single('image'), async (req, res) => 
 });
 
 app.delete('/api/admin/livestock/:id', async (req, res) => {
-    await connectDB();
     try {
         if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
         await Livestock.findByIdAndDelete(req.params.id);
@@ -267,7 +252,6 @@ app.delete('/api/admin/livestock/:id', async (req, res) => {
 });
 
 app.get('/api/admin/orders', async (req, res) => {
-    await connectDB();
     try {
         const orders = await Order.find({}).sort({ createdAt: -1 });
         res.json({ orders });
@@ -276,55 +260,7 @@ app.get('/api/admin/orders', async (req, res) => {
     }
 });
 
-app.get('/api/admin/orders/proof/:id', async (req, res) => {
-    await connectDB();
-    try {
-        const order = await Order.findById(req.params.id);
-        if (!order || !order.paymentProof || !order.paymentProof.data) return res.status(404).send('No proof found');
-        
-        res.set('Content-Type', order.paymentProof.contentType);
-        res.send(order.paymentProof.data);
-    } catch (err) {
-        res.status(500).send('Server Error');
-    }
-});
-
-app.put('/api/admin/orders/:id/reject', async (req, res) => {
-    await connectDB();
-    try {
-        const { reason } = req.body;
-        const order = await Order.findByIdAndUpdate(
-            req.params.id, 
-            { 
-                status: 'Payment Rejected', 
-                rejectionReason: reason || 'Invalid payment proof.'
-            }, 
-            { new: true }
-        );
-        
-        if (!order) return res.status(404).json({ message: 'Order not found' });
-
-        await User.findByIdAndUpdate(order.userId, { 
-            $push: { notifications: {
-                id: 'rej_' + Date.now(), 
-                title: 'Payment Rejected', 
-                message: `Order #${order._id.toString().slice(-6)} proof rejected: ${reason}`,
-                icon: 'alert-circle', 
-                color: 'red', 
-                timestamp: Date.now(), 
-                seen: false
-            }}
-        });
-
-        res.json({ success: true, message: 'Order rejected and user notified' });
-    } catch (err) { 
-        console.error("Reject Error:", err);
-        res.status(500).json({ error: err.message }); 
-    }
-});
-
 app.put('/api/admin/orders/:id', async (req, res) => {
-    await connectDB();
     try {
         const order = await Order.findByIdAndUpdate(req.params.id, { status: req.body.status }, { new: true });
         res.json(order);
@@ -334,7 +270,6 @@ app.put('/api/admin/orders/:id', async (req, res) => {
 });
 
 app.get('/api/admin/users', async (req, res) => {
-    await connectDB();
     try {
         const users = await User.find({}, 'name email createdAt').sort({ createdAt: -1 });
         res.json({ users });
@@ -345,7 +280,6 @@ app.get('/api/admin/users', async (req, res) => {
 
 // --- ORDER ROUTES ---
 app.get('/api/orders', authMiddleware, async (req, res) => {
-    await connectDB();
     try {
         const orders = await Order.find({ userId: req.user.id }).sort({ createdAt: -1 });
         res.json(orders);
@@ -354,55 +288,14 @@ app.get('/api/orders', authMiddleware, async (req, res) => {
     }
 });
 
-app.put('/api/orders/:id/reupload', authMiddleware, upload.single('paymentProof'), async (req, res) => {
-    await connectDB();
+app.post('/api/orders', authMiddleware, async (req, res) => {
     try {
-        if (!req.file) return res.status(400).send('No file uploaded');
-
-        const order = await Order.findOne({ _id: req.params.id, userId: req.user.id });
-        if (!order) return res.status(404).json({ message: 'Order not found' });
-
-        await Order.findByIdAndUpdate(req.params.id, {
-            status: 'Processing',
-            rejectionReason: '',
-            paymentProof: { 
-                data: req.file.buffer, 
-                contentType: req.file.mimetype 
-            }
-        });
-        
-        res.json({ success: true, message: 'Proof re-uploaded successfully' });
-    } catch (err) {
-        console.error("Re-upload Error:", err);
-        res.status(500).json({ message: 'Re-upload failed' });
-    }
-});
-
-app.post('/api/orders', authMiddleware, upload.single('paymentProof'), async (req, res) => {
-    await connectDB();
-    try {
-        const items = req.body.items ? JSON.parse(req.body.items) : [];
-        const address = req.body.address ? JSON.parse(req.body.address) : {};
-        const total = req.body.total;
-        const date = req.body.date;
-
-        const paymentProof = req.file ? {
-            data: req.file.buffer,
-            contentType: req.file.mimetype
-        } : undefined;
-
-        const newOrder = new Order({ 
-            items,
-            address,
-            total,
-            date,
-            paymentProof,
-            userId: req.user.id, 
-            customer: req.user.name 
-        });
+        // 1. Create the Order
+        const newOrder = new Order({ ...req.body, userId: req.user.id, customer: req.user.name });
         await newOrder.save();
 
-        const itemIds = items.map(item => item._id);
+        // 2. Mark purchased items as 'Sold' in Inventory
+        const itemIds = req.body.items.map(item => item._id);
         if (itemIds.length > 0) {
             await Livestock.updateMany(
                 { _id: { $in: itemIds } }, 
@@ -410,6 +303,7 @@ app.post('/api/orders', authMiddleware, upload.single('paymentProof'), async (re
             );
         }
 
+        // 3. Clear User's Cart
         await User.findByIdAndUpdate(req.user.id, { $set: { cart: [] } });
         
         res.status(201).json(newOrder);
@@ -420,15 +314,16 @@ app.post('/api/orders', authMiddleware, upload.single('paymentProof'), async (re
 });
 
 app.put('/api/orders/:id/cancel', authMiddleware, async (req, res) => {
-    await connectDB();
     try {
         const order = await Order.findOne({ _id: req.params.id, userId: req.user.id });
         if (!order) return res.status(404).json({ message: 'Order not found' });
         if (order.status !== 'Processing') return res.status(400).json({ message: 'Cannot cancel order' });
 
+        // 1. Update Order Status
         order.status = 'Cancelled';
         await order.save();
 
+        // 2. Restock Items (Mark as 'Available')
         const itemIds = order.items.map(item => item._id);
         if (itemIds.length > 0) {
             await Livestock.updateMany(
@@ -458,24 +353,17 @@ app.post('/api/payment/confirm', authMiddleware, (req, res) => res.json({ succes
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-// Catch-all for other static requests (e.g. if you have other pages)
-app.get('*', (req, res) => {
-    if (req.accepts('html')) {
-        res.sendFile(path.join(__dirname, 'public', 'index.html'));
-    } else {
-        res.status(404).send('Not Found');
-    }
+process.on('uncaughtException', (err) => {
+    console.error('🔥 UNCAUGHT EXCEPTION! Shutting down...', err);
+    process.exit(1);
 });
 
-// --- DUAL STARTUP STRATEGY ---
+process.on('unhandledRejection', (err) => {
+    console.error('🔥 UNHANDLED REJECTION! Shutting down...', err);
+    process.exit(1);
+});
 
-// 1. If running locally (node server.js), this block runs.
-if (require.main === module) {
-    const PORT = process.env.PORT || 3000;
-    app.listen(PORT, () => {
-        console.log(`🚀 Server running locally on port ${PORT}`);
-    });
-}
+const server = app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
 
-// 2. Export app for Vercel (Serverless)
-module.exports = app;
+server.keepAliveTimeout = 120 * 1000;
+server.headersTimeout = 120 * 1000;
