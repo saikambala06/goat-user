@@ -15,9 +15,9 @@ const User = require('./models/User');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'change-this-secret-key-123';
-
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/livestockmart';
 
+// --- Database Connection ---
 const connectDB = async () => {
     try {
         await mongoose.connect(MONGODB_URI, {
@@ -36,6 +36,7 @@ mongoose.connection.on('error', (err) => console.error('❌ MongoDB connection e
 
 connectDB();
 
+// --- Middleware ---
 const upload = multer({ 
     storage: multer.memoryStorage(),
     limits: { fileSize: 5 * 1024 * 1024 } 
@@ -50,11 +51,7 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(express.static('public'));
 
-app.get('/health', (req, res) => {
-    const dbStatus = mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected';
-    res.status(200).json({ status: 'UP', uptime: process.uptime(), database: dbStatus });
-});
-
+// --- Helpers ---
 function createToken(user) {
     return jwt.sign({ id: user._id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
 }
@@ -80,6 +77,22 @@ function authMiddleware(req, res, next) {
     }
 }
 
+// --- SYSTEM ROUTES ---
+app.get('/health', (req, res) => {
+    const dbStatus = mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected';
+    res.status(200).json({ status: 'UP', uptime: process.uptime(), database: dbStatus });
+});
+
+// Fix for 404 spam (Merged from snippet)
+app.get('/api/notifications', authMiddleware, async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id);
+        res.json(user ? user.notifications : []);
+    } catch (err) {
+        res.json([]);
+    }
+});
+
 // --- AUTH ROUTES ---
 app.post('/api/auth/register', async (req, res) => {
     try {
@@ -96,7 +109,6 @@ app.post('/api/auth/register', async (req, res) => {
         setAuthCookie(res, token);
         res.status(201).json({ user: { id: newUser._id, name: newUser.name, email: newUser.email } });
     } catch (err) {
-        console.error('Registration Error:', err);
         res.status(500).json({ message: 'Server error during registration' });
     }
 });
@@ -107,16 +119,14 @@ app.post('/api/auth/login', async (req, res) => {
         if (!email || !password) return res.status(400).json({ message: 'Credentials required' });
 
         const user = await User.findOne({ email });
-        if (!user) return res.status(400).json({ message: 'Invalid credentials' });
-
-        const isMatch = await user.comparePassword(password);
-        if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
+        if (!user || !(await user.comparePassword(password))) {
+            return res.status(400).json({ message: 'Invalid credentials' });
+        }
 
         const token = createToken(user);
         setAuthCookie(res, token);
         res.json({ user: { id: user._id, name: user.name, email: user.email } });
     } catch (err) {
-        console.error('Login Error:', err);
         res.status(500).json({ message: 'Server error during login' });
     }
 });
@@ -135,7 +145,6 @@ app.get('/api/user/state', authMiddleware, async (req, res) => {
     try {
         const user = await User.findById(req.user.id);
         if (!user) return res.status(404).json({ message: 'User not found' });
-        
         res.json({ 
             cart: user.cart || [], 
             wishlist: user.wishlist || [], 
@@ -143,52 +152,29 @@ app.get('/api/user/state', authMiddleware, async (req, res) => {
             notifications: user.notifications || [] 
         });
     } catch (err) { 
-        console.error("Get State Error:", err);
         res.status(500).json({ error: err.message }); 
-    }
-});
-
-// --- NEW NOTIFICATION ROUTE (Fixes 404 errors) ---
-app.get('/api/notifications', authMiddleware, async (req, res) => {
-    try {
-        const user = await User.findById(req.user.id);
-        // Always return an array, even if user not found, to prevent frontend .map() crash
-        res.json(user ? (user.notifications || []) : []);
-    } catch (err) {
-        console.error("Notification Error:", err);
-        // Return empty array on error so frontend doesn't crash with "map is not a function"
-        res.status(500).json([]); 
     }
 });
 
 app.put('/api/user/state', authMiddleware, async (req, res) => {
     try {
         const { cart, wishlist, addresses, notifications } = req.body;
-        
-        const updatedUser = await User.findByIdAndUpdate(
-            req.user.id, 
-            { $set: { cart, wishlist, addresses, notifications } },
-            { new: true } 
-        );
-        
-        if (!updatedUser) return res.status(404).json({ message: 'User not found' });
+        await User.findByIdAndUpdate(req.user.id, { $set: { cart, wishlist, addresses, notifications } });
         res.json({ message: 'State synchronized', success: true });
     } catch (err) { 
-        console.error("Sync State Error:", err); 
-        res.status(400).json({ error: 'Failed to save state', details: err.message }); 
+        res.status(400).json({ error: 'Failed to save state' }); 
     }
 });
 
 // --- LIVESTOCK ROUTES ---
 app.get('/api/livestock', async (req, res) => {
     try {
-        const livestock = await Livestock.find({}, '-image'); 
-        res.json(livestock || []); // Ensure we always send an array
+        // Merged Fix: Use lean() and ensure array return to prevent crashes
+        const livestock = await Livestock.find({}, '-image').lean(); 
+        res.json(Array.isArray(livestock) ? livestock : []);
     } catch (err) {
-        console.error("Livestock Fetch Error:", err);
-        // IMPORTANT: Sending an empty array on 500 allows frontend to render empty state 
-        // instead of crashing with "map is not a function"
-        res.status(500).json([]); 
+        console.error("Fetch Livestock Error:", err);
+        res.json([]); // Fallback to empty array
     }
 });
 
@@ -196,7 +182,7 @@ app.get('/api/livestock/image/:id', async (req, res) => {
     try {
         if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(404).send('Invalid ID');
         const livestock = await Livestock.findById(req.params.id, 'image');
-        if (!livestock || !livestock.image || !livestock.image.data) return res.status(404).send('Image not found');
+        if (!livestock?.image?.data) return res.status(404).send('Image not found');
         
         res.set('Content-Type', livestock.image.contentType);
         res.send(livestock.image.data);
@@ -209,20 +195,17 @@ app.get('/api/livestock/image/:id', async (req, res) => {
 app.get('/api/admin/livestock', async (req, res) => {
     try {
         const livestock = await Livestock.find({}).sort({ createdAt: -1 });
-        // NOTE: Admin expects { livestock: [] }, Public expects []
-        res.json({ livestock: livestock || [] });
+        res.json({ livestock });
     } catch (err) {
-        res.status(500).json({ message: 'Failed to load livestock', livestock: [] });
+        res.status(500).json({ message: 'Failed to load livestock' });
     }
 });
 
 app.post('/api/admin/livestock', upload.single('image'), async (req, res) => {
     try {
         const { name, type, breed, age, price, tags, status, weight } = req.body;
-        if (!name || !type || !price) return res.status(400).json({ message: 'Missing required fields' });
-
         const image = req.file ? { data: req.file.buffer, contentType: req.file.mimetype } : undefined;
-        let tagArray = tags && typeof tags === 'string' ? tags.split(',').map(t => t.trim()).filter(t => t.length > 0) : [];
+        let tagArray = tags && typeof tags === 'string' ? tags.split(',').map(t => t.trim()) : [];
 
         const newItem = new Livestock({
             name, type, breed, age, 
@@ -242,8 +225,6 @@ app.post('/api/admin/livestock', upload.single('image'), async (req, res) => {
 
 app.put('/api/admin/livestock/:id', upload.single('image'), async (req, res) => {
     try {
-        if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
-        
         const updates = { ...req.body };
         if (updates.price) updates.price = parseFloat(updates.price);
         if (req.file) updates.image = { data: req.file.buffer, contentType: req.file.mimetype };
@@ -258,7 +239,6 @@ app.put('/api/admin/livestock/:id', upload.single('image'), async (req, res) => 
 
 app.delete('/api/admin/livestock/:id', async (req, res) => {
     try {
-        if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ message: 'Invalid ID' });
         await Livestock.findByIdAndDelete(req.params.id);
         res.status(204).send();
     } catch (err) {
@@ -266,79 +246,7 @@ app.delete('/api/admin/livestock/:id', async (req, res) => {
     }
 });
 
-app.get('/api/admin/orders', async (req, res) => {
-    try {
-        const orders = await Order.find({}).sort({ createdAt: -1 });
-        res.json({ orders });
-    } catch (err) {
-        res.status(500).json({ message: 'Failed to load orders' });
-    }
-});
-
-app.get('/api/admin/orders/proof/:id', async (req, res) => {
-    try {
-        const order = await Order.findById(req.params.id);
-        if (!order || !order.paymentProof || !order.paymentProof.data) return res.status(404).send('No proof found');
-        
-        res.set('Content-Type', order.paymentProof.contentType);
-        res.send(order.paymentProof.data);
-    } catch (err) {
-        res.status(500).send('Server Error');
-    }
-});
-
-app.put('/api/admin/orders/:id/reject', async (req, res) => {
-    try {
-        const { reason } = req.body;
-        const order = await Order.findByIdAndUpdate(
-            req.params.id, 
-            { 
-                status: 'Payment Rejected', 
-                rejectionReason: reason || 'Invalid payment proof.'
-            }, 
-            { new: true }
-        );
-        
-        if (!order) return res.status(404).json({ message: 'Order not found' });
-
-        await User.findByIdAndUpdate(order.userId, { 
-            $push: { notifications: {
-                id: 'rej_' + Date.now(), 
-                title: 'Payment Rejected', 
-                message: `Order #${order._id.toString().slice(-6)} proof rejected: ${reason}`,
-                icon: 'alert-circle', 
-                color: 'red', 
-                timestamp: Date.now(), 
-                seen: false
-            }}
-        });
-
-        res.json({ success: true, message: 'Order rejected and user notified' });
-    } catch (err) { 
-        console.error("Reject Error:", err);
-        res.status(500).json({ error: err.message }); 
-    }
-});
-
-app.put('/api/admin/orders/:id', async (req, res) => {
-    try {
-        const order = await Order.findByIdAndUpdate(req.params.id, { status: req.body.status }, { new: true });
-        res.json(order);
-    } catch (err) {
-        res.status(500).json({ message: 'Update failed' });
-    }
-});
-
-app.get('/api/admin/users', async (req, res) => {
-    try {
-        const users = await User.find({}, 'name email createdAt').sort({ createdAt: -1 });
-        res.json({ users });
-    } catch (err) {
-        res.status(500).json({ message: 'Failed to load users' });
-    }
-});
-
-// --- ORDER ROUTES ---
+// --- ORDER ROUTES (Admin & User) ---
 app.get('/api/orders', authMiddleware, async (req, res) => {
     try {
         const orders = await Order.find({ userId: req.user.id }).sort({ createdAt: -1 });
@@ -348,118 +256,73 @@ app.get('/api/orders', authMiddleware, async (req, res) => {
     }
 });
 
-app.put('/api/orders/:id/reupload', authMiddleware, upload.single('paymentProof'), async (req, res) => {
-    try {
-        if (!req.file) return res.status(400).send('No file uploaded');
-
-        const order = await Order.findOne({ _id: req.params.id, userId: req.user.id });
-        if (!order) return res.status(404).json({ message: 'Order not found' });
-
-        await Order.findByIdAndUpdate(req.params.id, {
-            status: 'Processing',
-            rejectionReason: '',
-            paymentProof: { 
-                data: req.file.buffer, 
-                contentType: req.file.mimetype 
-            }
-        });
-        
-        res.json({ success: true, message: 'Proof re-uploaded successfully' });
-    } catch (err) {
-        console.error("Re-upload Error:", err);
-        res.status(500).json({ message: 'Re-upload failed' });
-    }
-});
-
 app.post('/api/orders', authMiddleware, upload.single('paymentProof'), async (req, res) => {
     try {
         const items = req.body.items ? JSON.parse(req.body.items) : [];
         const address = req.body.address ? JSON.parse(req.body.address) : {};
-        const total = req.body.total;
-        const date = req.body.date;
-
-        const paymentProof = req.file ? {
-            data: req.file.buffer,
-            contentType: req.file.mimetype
-        } : undefined;
+        const paymentProof = req.file ? { data: req.file.buffer, contentType: req.file.mimetype } : undefined;
 
         const newOrder = new Order({ 
-            items,
-            address,
-            total,
-            date,
+            items, address, 
+            total: req.body.total, 
+            date: req.body.date, 
             paymentProof,
             userId: req.user.id, 
             customer: req.user.name 
         });
         await newOrder.save();
 
+        // Mark items as Sold
         const itemIds = items.map(item => item._id);
-        if (itemIds.length > 0) {
-            await Livestock.updateMany(
-                { _id: { $in: itemIds } }, 
-                { $set: { status: 'Sold' } }
-            );
-        }
+        if (itemIds.length) await Livestock.updateMany({ _id: { $in: itemIds } }, { $set: { status: 'Sold' } });
 
+        // Clear Cart
         await User.findByIdAndUpdate(req.user.id, { $set: { cart: [] } });
-        
         res.status(201).json(newOrder);
     } catch (err) {
-        console.error("Order Create Error:", err);
+        console.error("Order Error:", err);
         res.status(500).json({ error: 'Order creation failed' });
     }
 });
 
-app.put('/api/orders/:id/cancel', authMiddleware, async (req, res) => {
+// Admin Order Management
+app.get('/api/admin/orders', async (req, res) => res.json({ orders: await Order.find({}).sort({ createdAt: -1 }) }));
+app.get('/api/admin/orders/proof/:id', async (req, res) => {
+    const order = await Order.findById(req.params.id);
+    if (!order?.paymentProof?.data) return res.status(404).send('No proof');
+    res.set('Content-Type', order.paymentProof.contentType).send(order.paymentProof.data);
+});
+
+// Payment Reject Logic
+app.put('/api/admin/orders/:id/reject', async (req, res) => {
     try {
-        const order = await Order.findOne({ _id: req.params.id, userId: req.user.id });
-        if (!order) return res.status(404).json({ message: 'Order not found' });
-        if (order.status !== 'Processing') return res.status(400).json({ message: 'Cannot cancel order' });
-
-        order.status = 'Cancelled';
-        await order.save();
-
-        const itemIds = order.items.map(item => item._id);
-        if (itemIds.length > 0) {
-            await Livestock.updateMany(
-                { _id: { $in: itemIds } }, 
-                { $set: { status: 'Available' } }
-            );
+        const { reason } = req.body;
+        const order = await Order.findByIdAndUpdate(req.params.id, 
+            { status: 'Payment Rejected', rejectionReason: reason || 'Invalid payment proof.' }, 
+            { new: true }
+        );
+        // Push notification to user
+        if (order) {
+            await User.findByIdAndUpdate(order.userId, { 
+                $push: { notifications: {
+                    id: 'rej_' + Date.now(), title: 'Payment Rejected', 
+                    message: `Order #${order._id.toString().slice(-6)} proof rejected: ${reason}`,
+                    icon: 'alert-circle', color: 'red', timestamp: Date.now(), seen: false
+                }}
+            });
         }
-
-        res.json({ success: true, message: 'Order cancelled & items restocked' });
-    } catch (err) {
-        console.error('Cancel Error:', err);
-        res.status(500).json({ message: 'Cancellation failed' });
-    }
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// --- PAYMENT ROUTES ---
-app.post('/api/payment/create', authMiddleware, (req, res) => {
-    const { amount } = req.body;
-    const paymentId = 'PAY_' + Date.now();
-    const upiString = `upi://pay?pa=${process.env.UPI_ID || 'sai.kambala@ybl'}&pn=LivestockMart&am=${amount}`;
-    res.json({ upiString, paymentId });
+app.put('/api/admin/orders/:id', async (req, res) => {
+    const order = await Order.findByIdAndUpdate(req.params.id, { status: req.body.status }, { new: true });
+    res.json(order);
 });
-
-app.post('/api/payment/confirm', authMiddleware, (req, res) => res.json({ success: true }));
 
 // --- FALLBACK HANDLERS ---
+app.get('/api/(.*)', (req, res) => res.status(404).json({ message: 'API Route not found' }));
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-process.on('uncaughtException', (err) => {
-    console.error('🔥 UNCAUGHT EXCEPTION! Shutting down...', err);
-    process.exit(1);
-});
-
-process.on('unhandledRejection', (err) => {
-    console.error('🔥 UNHANDLED REJECTION! Shutting down...', err);
-    process.exit(1);
-});
-
-const server = app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
-
-server.keepAliveTimeout = 120 * 1000;
-server.headersTimeout = 120 * 1000;
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
