@@ -148,6 +148,19 @@ app.get('/api/user/state', authMiddleware, async (req, res) => {
     }
 });
 
+// --- NEW NOTIFICATION ROUTE (Fixes 404 errors) ---
+app.get('/api/notifications', authMiddleware, async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id);
+        // Always return an array, even if user not found, to prevent frontend .map() crash
+        res.json(user ? (user.notifications || []) : []);
+    } catch (err) {
+        console.error("Notification Error:", err);
+        // Return empty array on error so frontend doesn't crash with "map is not a function"
+        res.status(500).json([]); 
+    }
+});
+
 app.put('/api/user/state', authMiddleware, async (req, res) => {
     try {
         const { cart, wishlist, addresses, notifications } = req.body;
@@ -170,9 +183,12 @@ app.put('/api/user/state', authMiddleware, async (req, res) => {
 app.get('/api/livestock', async (req, res) => {
     try {
         const livestock = await Livestock.find({}, '-image'); 
-        res.json(livestock);
+        res.json(livestock || []); // Ensure we always send an array
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error("Livestock Fetch Error:", err);
+        // IMPORTANT: Sending an empty array on 500 allows frontend to render empty state 
+        // instead of crashing with "map is not a function"
+        res.status(500).json([]); 
     }
 });
 
@@ -193,9 +209,10 @@ app.get('/api/livestock/image/:id', async (req, res) => {
 app.get('/api/admin/livestock', async (req, res) => {
     try {
         const livestock = await Livestock.find({}).sort({ createdAt: -1 });
-        res.json({ livestock });
+        // NOTE: Admin expects { livestock: [] }, Public expects []
+        res.json({ livestock: livestock || [] });
     } catch (err) {
-        res.status(500).json({ message: 'Failed to load livestock' });
+        res.status(500).json({ message: 'Failed to load livestock', livestock: [] });
     }
 });
 
@@ -258,7 +275,6 @@ app.get('/api/admin/orders', async (req, res) => {
     }
 });
 
-// NEW: Serve Payment Proof
 app.get('/api/admin/orders/proof/:id', async (req, res) => {
     try {
         const order = await Order.findById(req.params.id);
@@ -271,7 +287,6 @@ app.get('/api/admin/orders/proof/:id', async (req, res) => {
     }
 });
 
-// NEW: Reject Payment with Reason & Notification
 app.put('/api/admin/orders/:id/reject', async (req, res) => {
     try {
         const { reason } = req.body;
@@ -286,7 +301,6 @@ app.put('/api/admin/orders/:id/reject', async (req, res) => {
         
         if (!order) return res.status(404).json({ message: 'Order not found' });
 
-        // Notify User
         await User.findByIdAndUpdate(order.userId, { 
             $push: { notifications: {
                 id: 'rej_' + Date.now(), 
@@ -334,7 +348,6 @@ app.get('/api/orders', authMiddleware, async (req, res) => {
     }
 });
 
-// NEW: User Re-upload Proof
 app.put('/api/orders/:id/reupload', authMiddleware, upload.single('paymentProof'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).send('No file uploaded');
@@ -360,7 +373,6 @@ app.put('/api/orders/:id/reupload', authMiddleware, upload.single('paymentProof'
 
 app.post('/api/orders', authMiddleware, upload.single('paymentProof'), async (req, res) => {
     try {
-        // Since we are using FormData on frontend, items and address are sent as strings
         const items = req.body.items ? JSON.parse(req.body.items) : [];
         const address = req.body.address ? JSON.parse(req.body.address) : {};
         const total = req.body.total;
@@ -371,7 +383,6 @@ app.post('/api/orders', authMiddleware, upload.single('paymentProof'), async (re
             contentType: req.file.mimetype
         } : undefined;
 
-        // 1. Create the Order
         const newOrder = new Order({ 
             items,
             address,
@@ -383,7 +394,6 @@ app.post('/api/orders', authMiddleware, upload.single('paymentProof'), async (re
         });
         await newOrder.save();
 
-        // 2. Mark purchased items as 'Sold' in Inventory
         const itemIds = items.map(item => item._id);
         if (itemIds.length > 0) {
             await Livestock.updateMany(
@@ -392,7 +402,6 @@ app.post('/api/orders', authMiddleware, upload.single('paymentProof'), async (re
             );
         }
 
-        // 3. Clear User's Cart
         await User.findByIdAndUpdate(req.user.id, { $set: { cart: [] } });
         
         res.status(201).json(newOrder);
@@ -408,11 +417,9 @@ app.put('/api/orders/:id/cancel', authMiddleware, async (req, res) => {
         if (!order) return res.status(404).json({ message: 'Order not found' });
         if (order.status !== 'Processing') return res.status(400).json({ message: 'Cannot cancel order' });
 
-        // 1. Update Order Status
         order.status = 'Cancelled';
         await order.save();
 
-        // 2. Restock Items (Mark as 'Available')
         const itemIds = order.items.map(item => item._id);
         if (itemIds.length > 0) {
             await Livestock.updateMany(
