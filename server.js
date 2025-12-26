@@ -7,7 +7,7 @@ const jwt = require('jsonwebtoken');
 const multer = require('multer');
 require('dotenv').config();
 
-// Models
+// Models (Ensure these files exist in your 'models' folder)
 const Livestock = require('./models/Livestock');
 const Order = require('./models/Order');
 const User = require('./models/User');
@@ -15,7 +15,7 @@ const User = require('./models/User');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'change-this-secret-key-123';
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/livestockmart';
+const MONGODB_URI = process.env.MONGODB_URI;
 
 // --- OPTIMIZATION: Database Connection Caching for Vercel/Serverless ---
 let cachedDb = null;
@@ -24,6 +24,12 @@ const connectDB = async () => {
     if (cachedDb && mongoose.connection.readyState === 1) {
         return cachedDb;
     }
+    
+    if (!MONGODB_URI) {
+        console.error("❌ MONGODB_URI is missing in .env file");
+        return null;
+    }
+
     try {
         await mongoose.connect(MONGODB_URI, {
             serverSelectionTimeoutMS: 5000,
@@ -34,6 +40,7 @@ const connectDB = async () => {
         return cachedDb;
     } catch (err) {
         console.error('❌ MongoDB Connection Error:', err);
+        throw err; // Throw error so the request fails cleanly
     }
 };
 
@@ -42,22 +49,28 @@ connectDB();
 
 const upload = multer({ 
     storage: multer.memoryStorage(),
-    limits: { fileSize: 5 * 1024 * 1024 } 
+    limits: { fileSize: 5 * 1024 * 1024 } // 5MB Limit
 });
 
+// Middleware
 app.use(cors({ 
-    origin: true, 
+    origin: true, // Be careful: In production, consider setting specific frontend URL
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
 }));
 app.use(express.json());
 app.use(cookieParser());
-app.use(express.static('public'));
+// FIX: Use path.join to ensure correct folder location
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Middleware to ensure DB is connected before handling request
 app.use(async (req, res, next) => {
-    await connectDB();
-    next();
+    try {
+        await connectDB();
+        next();
+    } catch (err) {
+        res.status(500).json({ error: "Database Connection Failed" });
+    }
 });
 
 app.get('/health', (req, res) => {
@@ -165,7 +178,6 @@ app.put('/api/user/state', authMiddleware, async (req, res) => {
     }
 });
 
-// --- FIX: Missing Notification Route ---
 app.get('/api/notifications', authMiddleware, async (req, res) => {
     try {
         const user = await User.findById(req.user.id, 'notifications');
@@ -178,7 +190,6 @@ app.get('/api/notifications', authMiddleware, async (req, res) => {
 // --- LIVESTOCK ROUTES ---
 app.get('/api/livestock', async (req, res) => {
     try {
-        // Optimization: Only select needed fields, exclude heavy images
         const livestock = await Livestock.find({}, '-image'); 
         res.json(livestock);
     } catch (err) {
@@ -193,7 +204,6 @@ app.get('/api/livestock/image/:id', async (req, res) => {
         const livestock = await Livestock.findById(req.params.id, 'image');
         if (!livestock || !livestock.image || !livestock.image.data) return res.status(404).send('Image not found');
         
-        // --- OPTIMIZATION: Browser Caching for Images (24 hours) ---
         res.set('Cache-Control', 'public, max-age=86400'); 
         res.set('Content-Type', livestock.image.contentType);
         res.send(livestock.image.data);
@@ -272,7 +282,7 @@ app.get('/api/admin/orders/proof/:id', async (req, res) => {
         const order = await Order.findById(req.params.id);
         if (!order || !order.paymentProof || !order.paymentProof.data) return res.status(404).send('No proof found');
         
-        res.set('Cache-Control', 'public, max-age=3600'); // Cache proof for 1 hour
+        res.set('Cache-Control', 'public, max-age=3600'); 
         res.set('Content-Type', order.paymentProof.contentType);
         res.send(order.paymentProof.data);
     } catch (err) {
@@ -291,6 +301,7 @@ app.put('/api/admin/orders/:id/reject', async (req, res) => {
         );
         if (!order) return res.status(404).json({ message: 'Order not found' });
 
+        // Ensure user notifications array exists before pushing
         await User.findByIdAndUpdate(order.userId, { 
             $push: { notifications: {
                 id: 'rej_' + Date.now(), 
@@ -405,8 +416,27 @@ app.post('/api/payment/create', authMiddleware, (req, res) => {
 
 app.post('/api/payment/confirm', authMiddleware, (req, res) => res.json({ success: true }));
 
-// --- FALLBACK ---
+// --- FALLBACK & GLOBAL ERROR HANDLING ---
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+// FIX: Global Error Handler (Must be at the bottom)
+// Catches Multer errors (File too large) and JSON parsing errors
+app.use((err, req, res, next) => {
+    console.error('🔥 Global Error:', err);
+    if (err instanceof multer.MulterError) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+            return res.status(400).json({ message: 'File is too large. Max 5MB allowed.' });
+        }
+    }
+    res.status(500).json({ message: 'Internal Server Error' });
+});
+
+// FIX: Conditional Listen for Vercel
+// Vercel handles the server start automatically. We only listen if running locally.
+if (require.main === module) {
+    app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+}
+
+// FIX: Export the app for Vercel Serverless Functions
+module.exports = app;
